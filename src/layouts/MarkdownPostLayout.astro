@@ -1,0 +1,49 @@
+---
+import BaseLayout from './BaseLayout.astro';
+const { frontmatter } = Astro.props;
+---
+<BaseLayout pageTitle={frontmatter.title}>
+  <article style="max-width: 800px;">
+    <div class="post-meta">
+      <time datetime={frontmatter.pubDate.toISOString()}>
+        {frontmatter.pubDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+      </time>
+      <span class="author">By {frontmatter.author}</span>
+    </div>
+    
+    <figure style="margin: 1.5rem 0;">
+      <img src={frontmatter.image.url} alt={frontmatter.image.alt} style="border-radius: 5px; border: 1px solid #e5e5e5;" />
+      <figcaption style="text-align: center; font-size: 0.9rem; color: #666; margin-top: 0.5rem;">{frontmatter.image.alt}</figcaption>
+    </figure>
+
+    <p style="font-size: 1.1rem; color: #555; font-style: italic; margin: 1rem 0;">{frontmatter.description}</p>
+
+    <div class="post-tags" style="margin: 1rem 0;">
+      {frontmatter.tags.map((tag) => (
+        <a href={`/tags/${tag}`} style="display: inline-block; background-color: #e8f0ff; color: #0066cc; padding: 0.3rem 0.7rem; border-radius: 15px; margin-right: 0.5rem; font-size: 0.9rem; text-decoration: none; border: 1px solid #d0e0ff;">
+          {tag}
+        </a>
+      ))}
+    </div>
+
+    <div style="border-top: 1px solid #e5e5e5; padding-top: 1rem; margin-top: 1.5rem;">
+      <slot />
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .post-meta {
+    color: #666;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+  }
+  
+  .post-meta time {
+    margin-right: 1rem;
+  }
+  
+  .post-meta .author {
+    color: #999;
+  }
+</style>

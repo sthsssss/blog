@@ -1,0 +1,27 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from '../layouts/BaseLayout.astro'
+import BlogPost from '../components/BlogPost.astro';
+const pageTitle = "Blog";
+const allPosts = await getCollection("blog");
+const sortedPosts = allPosts.sort((a, b) => b.data.pubDate - a.data.pubDate);
+const uniqueTags = [...new Set(allPosts.map((post) => post.data.tags).flat())].sort();
+---
+<BaseLayout pageTitle={pageTitle}>
+  <div class="blog-container">
+    <div class="blog-main">
+      <p>Posts about tech, development, and learning journey.</p>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        {sortedPosts.map((post) => <BlogPost url={`/posts/${post.id}/`} title={post.data.title} />)}
+      </ul>
+    </div>
+    <aside class="blog-sidebar">
+      <h3>Tags</h3>
+      <ul class="tags-list">
+        {uniqueTags.map((tag) => (
+          <li><a href={`/tags/${tag}`} class="tag-item">{tag}</a></li>
+        ))}
+      </ul>
+    </aside>
+  </div>
+</BaseLayout>

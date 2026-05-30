@@ -12,6 +12,14 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^6.4.2"
+    "@astrojs/preact": "^5.1.4",
+    "@astrojs/rss": "^4.0.18",
+    "astro": "^6.4.2",
+    "npx": "^10.2.2",
+    "preact": "^10.29.2"
+  },
+  "devDependencies": {
+    "prettier": "3.8.3",
+    "prettier-plugin-astro": "0.14.1"
   }
 }
