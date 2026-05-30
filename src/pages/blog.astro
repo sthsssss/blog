@@ -27,7 +27,7 @@ const uniqueTags = [...new Set(allPosts.map((post) => post.data.tags).flat())].s
       <h3>Tags</h3>
       <ul class="tags-list">
         {uniqueTags.map((tag) => (
-          <li><a href={`/tags/${tag}`} class="tag-item">{tag}</a></li>
+          <li><a href={`/tags/${slugify(tag)}`} class="tag-item">{tag}</a></li>
         ))}
       </ul>
     </aside>
