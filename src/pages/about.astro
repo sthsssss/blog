@@ -1,74 +1,46 @@
 ---
-import "../styles/global.css";
-import Footer from "../components/Footer.astro";
-const pageTitle = "About Me";
+import BaseLayout from "../layouts/BaseLayout.astro";
+const pageTitle = "About";
 
-const identity = {
-  firstName: "Sarah",
-  country: "Canada",
-  occupation: "Technical Writer",
-  hobbies: ["photography", "birdwatching", "baseball"],
-};
+const interests = [
+  "Thick clients / desktop application architecture",
+  "D3D12 / low-level graphics programming",
+  "Systems programming & performance",
+  "Rendering pipelines",
+  "Real-time graphics",
+];
 
-const skills = ["HTML", "CSS", "JavaScript", "React", "Astro", "Writing Docs"];
-
-const happy = true;
-const finished = false;
-const goal = 3;
+const career = [
+  { company: "현대로템 (Hyundai Rotem)", years: "2025" },
+  { company: "세나클 (CenaCle)", years: "2026~" },
+];
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width" />
-    <meta name="generator" content={Astro.generator} />
-    <title>{pageTitle}</title>
-  </head>
-  <body>
-    <a href="/">Home</a>
-    <a href="/about/">About</a>
-    <h1>{pageTitle}</h1>
-    <style>
-      h1 {
-        color: purple;
-        font-size: 4rem;
-      }
-    </style>
-    <p>Here are a few facts about me:</p>
-    <ul>
-      <li>My name is {identity.firstName}.</li>
-      <li>
-        I live in {identity.country} and I work as a {identity.occupation}.
-      </li>
-      {
-        identity.hobbies.length >= 2 && (
-          <li>
-            Two of my hobbies are: {identity.hobbies[0]} and{" "}
-            {identity.hobbies[1]}
-          </li>
-        )
-      }
-    </ul>
-    <p>My skills are:</p>
-    <ul>
-      {skills.map((skill) => <li>{skill}</li>)}
-    </ul>
-    {happy && <p>I am happy to be learning Astro!</p>}
+<BaseLayout pageTitle={pageTitle}>
+  <section>
+    <h2>About</h2>
+    <p>
+      Technical blog focused on systems and graphics.
+    </p>
+  </section>
 
-    {finished && <p>I finished this tutorial!</p>}
+  <section>
+    <h3>Interests</h3>
+    <ul>
+      {interests.map((i) => (
+        <li>{i}</li>
+      ))}
+    </ul>
+  </section>
 
-    {
-      goal === 3 ? (
-        <p>My goal is to finish in 3 days.</p>
-      ) : (
-        <p>My goal is not 3 days.</p>
-      )
-    }
-    <Footer />
-    <script>
-      import "../scripts/menu.js";
-    </script>
-  </body>
-</html>
+  <section>
+    <h3>Career</h3>
+    <ul>
+      {career.map((c) => (
+        <li>
+          <strong>{c.company}</strong>&nbsp;— <span>{c.years}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+</BaseLayout>

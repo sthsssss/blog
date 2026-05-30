@@ -1,0 +1,35 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import BlogPost from "../../components/BlogPost.astro";
+import slugify from '../../utils/slugify';
+
+export async function getStaticPaths() {
+  const allPosts = await getCollection("blog");
+  const uniqueTags = [...new Set(allPosts.map((post) => post.data.tags).flat())];
+
+  return uniqueTags.map((tag) => {
+    const slug = slugify(tag);
+    const filteredPosts = allPosts.filter((post) => post.data.tags.includes(tag));
+    return {
+      params: { tag: slug },
+      props: { posts: filteredPosts, originalTag: tag },
+    };
+  });
+}
+
+const { tag } = Astro.params;
+const { posts, originalTag } = Astro.props;
+---
+
+<BaseLayout pageTitle={originalTag}>
+  <p>Posts tagged with {originalTag}</p>
+  <ul>
+    {
+      posts.map((post) => {
+        const slug = post.data?.title ? slugify(post.data.title) : post.id;
+        return <BlogPost url={`/posts/${slug}/`} title={post.data.title} />
+      })
+    }
+  </ul>
+</BaseLayout>
