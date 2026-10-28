@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+<title id="title">C++ commute series</title>
+<desc id="desc">Objects, addresses, references, value categories and machine code connected in one learning sequence.</desc>
+<rect width="1200" height="480" fill="#f4f7fb"/>
+<path d="M0 440H1200" stroke="#d7e0eb" stroke-width="2"/>
+<rect x="64" y="56" width="130" height="48" rx="24" fill="#0f766e"/>
+<text x="129" y="88" font-family="system-ui,sans-serif" font-size="23" text-anchor="middle" fill="white">13 PARTS</text>
+<text x="64" y="193" font-family="system-ui,sans-serif" font-size="64" font-weight="700" fill="#142d44">C++: objects to machine code</text>
+<text x="68" y="247" font-family="system-ui,sans-serif" font-size="28" fill="#52677c">Pointers · References · const · Values · Optimization</text>
+<g font-family="monospace" font-size="22" text-anchor="middle">
+<rect x="66" y="311" width="240" height="72" rx="12" fill="white" stroke="#bad0df"/>
+<text x="186" y="355" fill="#173d55">Gradient data;</text>
+<path d="M324 347H401m-13-9 13 9-13 9" fill="none" stroke="#0f766e" stroke-width="3"/>
+<rect x="422" y="311" width="290" height="72" rx="12" fill="white" stroke="#bad0df"/>
+<text x="567" y="355" fill="#173d55">Gradient&amp; r = data;</text>
+<path d="M730 347H807m-13-9 13 9-13 9" fill="none" stroke="#0f766e" stroke-width="3"/>
+<rect x="828" y="311" width="306" height="72" rx="12" fill="#142d44"/>
+<text x="981" y="355" fill="#d5f5ec">mov eax, [rdi]</text>
+</g></svg>

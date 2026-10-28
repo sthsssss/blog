@@ -1,0 +1,445 @@
+{
+  "time": "2026-10-28T00:23:14.274862+09:00",
+  "standard": "C++20",
+  "runs": [
+    {
+      "compiler": "Clang",
+      "source": "01_objects.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "copy: 0 100\nassignment: 255 200\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "02_pointers.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "same target: 100 100\nredirected: 100 200\narray: 10 99 30\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "03_references.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "aliases: 100 200\nassignment: 50 20 10\ncopied view: 75\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "04_const.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "read-only path: 100\npointer layers: 10 120\nexternal target: 180\nconst member function: 255\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "05_arguments.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value argument: 0 100\nreference argument: 100\npointer argument: 200\npointer redirected: true\nrange passed by value: 9 7 7\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "06_returns.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value return: 0 100\nreference return: 150 200\nconst return path: 180 250\nowned member: 75\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "07_categories.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "name: mutable lvalue\nconst name: const lvalue or fallback\nnew result: rvalue\nmove expression: rvalue\nnamed rvalue reference: mutable lvalue\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "08_binding.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "same object: 100\ntemporary bindings: 0 200\nauto: 300 150\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "09_lifetime.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "outer target: 0\ndirect temporary alive: 1\nafter block: 0\nforwarded temporary alive: 0\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "10_semantics.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value semantics: 10 99\ncopied view: 100 100\nconst &: 3\n&&: 3\nafter inspect: 3\nsame storage: true\nafter reassignment: 7 10\nconst &: 3\nowner empty: true\nobserver still points: true\nmove from const copies: 10 99\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "11_elision.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n",
+      "exit": 0
+    },
+    {
+      "compiler": "Clang",
+      "source": "12_optimizer.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "optimizer examples: PASS\nIntView layout bytes: 8\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "01_objects.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "copy: 0 100\nassignment: 255 200\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "02_pointers.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "same target: 100 100\nredirected: 100 200\narray: 10 99 30\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "03_references.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "aliases: 100 200\nassignment: 50 20 10\ncopied view: 75\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "04_const.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "read-only path: 100\npointer layers: 10 120\nexternal target: 180\nconst member function: 255\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "05_arguments.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value argument: 0 100\nreference argument: 100\npointer argument: 200\npointer redirected: true\nrange passed by value: 9 7 7\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "06_returns.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value return: 0 100\nreference return: 150 200\nconst return path: 180 250\nowned member: 75\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "07_categories.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "name: mutable lvalue\nconst name: const lvalue or fallback\nnew result: rvalue\nmove expression: rvalue\nnamed rvalue reference: mutable lvalue\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "08_binding.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "same object: 100\ntemporary bindings: 0 200\nauto: 300 150\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "09_lifetime.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "outer target: 0\ndirect temporary alive: 1\nafter block: 0\nforwarded temporary alive: 0\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "10_semantics.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "value semantics: 10 99\ncopied view: 100 100\nconst &: 3\n&&: 3\nafter inspect: 3\nsame storage: true\nafter reassignment: 7 10\nconst &: 3\nowner empty: true\nobserver still points: true\nmove from const copies: 10 99\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "11_elision.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n",
+      "exit": 0
+    },
+    {
+      "compiler": "GCC",
+      "source": "12_optimizer.cpp",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Wpedantic",
+      "stdout": "optimizer examples: PASS\nIntView layout bytes: 8\n",
+      "exit": 0
+    }
+  ],
+  "elision": [
+    {
+      "compiler": "Clang",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "Clang",
+      "flags": [
+        "-O0",
+        "-fno-elide-constructors"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=1\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "Clang",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "Clang",
+      "flags": [
+        "-O2",
+        "-fno-elide-constructors"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=1\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "GCC",
+      "flags": [
+        "-O0"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "GCC",
+      "flags": [
+        "-O0",
+        "-fno-elide-constructors"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=1\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "GCC",
+      "flags": [
+        "-O2"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=0\nparameter: copies=1, moves=1\n"
+    },
+    {
+      "compiler": "GCC",
+      "flags": [
+        "-O2",
+        "-fno-elide-constructors"
+      ],
+      "stdout": "direct: copies=0, moves=0\nnamed: copies=0, moves=1\nparameter: copies=1, moves=1\n"
+    }
+  ],
+  "negative": [
+    {
+      "compiler": "Clang",
+      "case": "const_object_write",
+      "diagnostic": "<build>/const_object_write.cpp:4:43: error: cannot assign to variable 'g' with const-qualified type 'const Gradient'\n    4 | int main(){const Gradient g{0,255};g.start=1;}\n      |                                    ~~~~~~~^\n<build>/const_object_write.cpp:4:27: note: variable 'g' declared const here\n    4 | int main(){const Gradient g{0,255};g.start=1;}\n      |            ~~~~~~~~~~~~~~~^~~~~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_reference_write",
+      "diagnostic": "<build>/const_reference_write.cpp:4:57: error: cannot assign to variable 'r' with const-qualified type 'const Gradient &'\n    4 | int main(){Gradient g{0,255};const Gradient& r=g;r.start=1;}\n      |                                                  ~~~~~~~^\n<build>/const_reference_write.cpp:4:46: note: variable 'r' declared const here\n    4 | int main(){Gradient g{0,255};const Gradient& r=g;r.start=1;}\n      |                              ~~~~~~~~~~~~~~~~^~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "pointer_to_const_write",
+      "diagnostic": "<build>/pointer_to_const_write.cpp:4:59: error: cannot assign to variable 'p' with const-qualified type 'const Gradient *'\n    4 | int main(){Gradient g{0,255};const Gradient* p=&g;p->start=1;}\n      |                                                   ~~~~~~~~^\n<build>/pointer_to_const_write.cpp:4:46: note: variable 'p' declared const here\n    4 | int main(){Gradient g{0,255};const Gradient* p=&g;p->start=1;}\n      |                              ~~~~~~~~~~~~~~~~^~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_pointer_redirect",
+      "diagnostic": "<build>/const_pointer_redirect.cpp:4:59: error: cannot assign to variable 'p' with const-qualified type 'Gradient *const'\n    4 | int main(){Gradient a{0,255},b{1,2};Gradient* const p=&a;p=&b;}\n      |                                                          ~^\n<build>/const_pointer_redirect.cpp:4:53: note: variable 'p' declared const here\n    4 | int main(){Gradient a{0,255},b{1,2};Gradient* const p=&a;p=&b;}\n      |                                     ~~~~~~~~~~~~~~~~^~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_owned_member",
+      "diagnostic": "<build>/const_owned_member.cpp:4:76: error: cannot assign to variable 'o' with const-qualified type 'const Owner'\n    4 | struct Owner{Gradient data;};int main(){const Owner o{{0,255}};o.data.start=1;}\n      |                                                                ~~~~~~~~~~~~^\n<build>/const_owned_member.cpp:4:53: note: variable 'o' declared const here\n    4 | struct Owner{Gradient data;};int main(){const Owner o{{0,255}};o.data.start=1;}\n      |                                         ~~~~~~~~~~~~^~~~~~~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_pointer_field",
+      "diagnostic": "<build>/const_pointer_field.cpp:4:83: error: cannot assign to variable 'v' with const-qualified type 'const View'\n    4 | struct View{Gradient* p;};int main(){Gradient a{0,255},b{1,2};const View v{&a};v.p=&b;}\n      |                                                                                ~~~^\n<build>/const_pointer_field.cpp:4:74: note: variable 'v' declared const here\n    4 | struct View{Gradient* p;};int main(){Gradient a{0,255},b{1,2};const View v{&a};v.p=&b;}\n      |                                                               ~~~~~~~~~~~^~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "lvalue_reference_to_prvalue",
+      "diagnostic": "<build>/lvalue_reference_to_prvalue.cpp:4:22: error: non-const lvalue reference to type 'Gradient' cannot bind to a temporary of type 'Gradient'\n    4 | int main(){Gradient& r=make();}\n      |                      ^ ~~~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "lvalue_reference_to_xvalue",
+      "diagnostic": "<build>/lvalue_reference_to_xvalue.cpp:4:40: error: non-const lvalue reference to type 'Gradient' cannot bind to a temporary of type 'typename std::remove_reference<Gradient &>::type' (aka 'Gradient')\n    4 | int main(){Gradient g{0,255};Gradient& r=std::move(g);}\n      |                                        ^ ~~~~~~~~~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "rvalue_reference_to_lvalue",
+      "diagnostic": "<build>/rvalue_reference_to_lvalue.cpp:4:41: error: rvalue reference to type 'Gradient' cannot bind to lvalue of type 'Gradient'\n    4 | int main(){Gradient g{0,255};Gradient&& r=g;}\n      |                                         ^ ~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "mutable_reference_to_const",
+      "diagnostic": "<build>/mutable_reference_to_const.cpp:4:46: error: binding reference of type 'Gradient' to value of type 'const Gradient' drops 'const' qualifier\n    4 | int main(){const Gradient g{0,255};Gradient& r=g;}\n      |                                              ^ ~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "move_const_to_mutable_rvalue_reference",
+      "diagnostic": "<build>/move_const_to_mutable_rvalue_reference.cpp:4:47: error: binding reference of type 'Gradient' to value of type 'typename std::remove_reference<const Gradient &>::type' (aka 'const Gradient') drops 'const' qualifier\n    4 | int main(){const Gradient g{0,255};Gradient&& r=std::move(g);}\n      |                                               ^ ~~~~~~~~~~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_owner_mutable_getter",
+      "diagnostic": "<build>/const_owner_mutable_getter.cpp:4:56: error: binding reference of type 'Gradient' to value of type 'const Gradient' drops 'const' qualifier\n    4 | struct Owner{Gradient data;Gradient& get()const{return data;}};\n      |                                                        ^~~~\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "const_named_is_not_assignable",
+      "diagnostic": "<build>/const_named_is_not_assignable.cpp:4:37: error: no viable overloaded '='\n    4 | int main(){const Gradient g{0,255};g=Gradient{1,2};}\n      |                                    ~^~~~~~~~~~~~~~\n./gradient.hpp:2:8: note: candidate function (the implicit copy assignment operator) not viable: 'this' argument has type 'const Gradient', but method is not marked const\n    2 | struct Gradient {\n      |        ^\n./gradient.hpp:2:8: note: candidate function (the implicit move assignment operator) not viable: 'this' argument has type 'const Gradient', but method is not marked const\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "unique_owner_copy",
+      "diagnostic": "<build>/unique_owner_copy.cpp:5:49: error: call to deleted constructor of '__detail::__unique_ptr_t<int>' (aka 'unique_ptr<int>')\n    5 | int main(){auto p=std::make_unique<int>(1);auto q=p;}\n      |                                                 ^ ~\n/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/bits/unique_ptr.h:522:7: note: 'unique_ptr' has been explicitly marked deleted here\n  522 |       unique_ptr(const unique_ptr&) = delete;\n      |       ^\n1 error generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "reference_member_assignment",
+      "diagnostic": "<build>/reference_member_assignment.cpp:4:82: error: object of type 'View' cannot be assigned because its copy assignment operator is implicitly deleted\n    4 | struct View{Gradient& data;};int main(){Gradient a{0,255},b{1,2};View x{a},y{b};x=y;}\n      |                                                                                  ^\n<build>/reference_member_assignment.cpp:4:23: note: copy assignment operator of 'View' is implicitly deleted because field 'data' is of reference type 'Gradient &'\n    4 | struct View{Gradient& data;};int main(){Gradient a{0,255},b{1,2};View x{a},y{b};x=y;}\n      |                       ^\n1 error generated.\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_object_write",
+      "diagnostic": "<build>/const_object_write.cpp: In function ‘int main()’:\n<build>/const_object_write.cpp:4:43: error: assignment of member ‘Gradient::start’ in read-only object\n    4 | int main(){const Gradient g{0,255};g.start=1;}\n      |                                    ~~~~~~~^~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_reference_write",
+      "diagnostic": "<build>/const_reference_write.cpp: In function ‘int main()’:\n<build>/const_reference_write.cpp:4:57: error: assignment of member ‘Gradient::start’ in read-only object\n    4 | int main(){Gradient g{0,255};const Gradient& r=g;r.start=1;}\n      |                                                  ~~~~~~~^~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "pointer_to_const_write",
+      "diagnostic": "<build>/pointer_to_const_write.cpp: In function ‘int main()’:\n<build>/pointer_to_const_write.cpp:4:59: error: assignment of member ‘Gradient::start’ in read-only object\n    4 | int main(){Gradient g{0,255};const Gradient* p=&g;p->start=1;}\n      |                                                   ~~~~~~~~^~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_pointer_redirect",
+      "diagnostic": "<build>/const_pointer_redirect.cpp: In function ‘int main()’:\n<build>/const_pointer_redirect.cpp:4:59: error: assignment of read-only variable ‘p’\n    4 | int main(){Gradient a{0,255},b{1,2};Gradient* const p=&a;p=&b;}\n      |                                                          ~^~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_owned_member",
+      "diagnostic": "<build>/const_owned_member.cpp: In function ‘int main()’:\n<build>/const_owned_member.cpp:4:76: error: assignment of member ‘Gradient::start’ in read-only object\n    4 | struct Owner{Gradient data;};int main(){const Owner o{{0,255}};o.data.start=1;}\n      |                                                                ~~~~~~~~~~~~^~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_pointer_field",
+      "diagnostic": "<build>/const_pointer_field.cpp: In function ‘int main()’:\n<build>/const_pointer_field.cpp:4:83: error: assignment of member ‘View::p’ in read-only object\n    4 | struct View{Gradient* p;};int main(){Gradient a{0,255},b{1,2};const View v{&a};v.p=&b;}\n      |                                                                                ~~~^~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "lvalue_reference_to_prvalue",
+      "diagnostic": "<build>/lvalue_reference_to_prvalue.cpp: In function ‘int main()’:\n<build>/lvalue_reference_to_prvalue.cpp:4:28: error: cannot bind non-const lvalue reference of type ‘Gradient&’ to an rvalue of type ‘Gradient’\n    4 | int main(){Gradient& r=make();}\n      |                        ~~~~^~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "lvalue_reference_to_xvalue",
+      "diagnostic": "<build>/lvalue_reference_to_xvalue.cpp: In function ‘int main()’:\n<build>/lvalue_reference_to_xvalue.cpp:4:51: error: cannot bind non-const lvalue reference of type ‘Gradient&’ to an rvalue of type ‘std::remove_reference<Gradient&>::type’ {aka ‘Gradient’}\n    4 | int main(){Gradient g{0,255};Gradient& r=std::move(g);}\n      |                                          ~~~~~~~~~^~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "rvalue_reference_to_lvalue",
+      "diagnostic": "<build>/rvalue_reference_to_lvalue.cpp: In function ‘int main()’:\n<build>/rvalue_reference_to_lvalue.cpp:4:43: error: cannot bind rvalue reference of type ‘Gradient&&’ to lvalue of type ‘Gradient’\n    4 | int main(){Gradient g{0,255};Gradient&& r=g;}\n      |                                           ^\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "mutable_reference_to_const",
+      "diagnostic": "<build>/mutable_reference_to_const.cpp: In function ‘int main()’:\n<build>/mutable_reference_to_const.cpp:4:48: error: binding reference of type ‘Gradient&’ to ‘const Gradient’ discards qualifiers\n    4 | int main(){const Gradient g{0,255};Gradient& r=g;}\n      |                                                ^\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "move_const_to_mutable_rvalue_reference",
+      "diagnostic": "<build>/move_const_to_mutable_rvalue_reference.cpp: In function ‘int main()’:\n<build>/move_const_to_mutable_rvalue_reference.cpp:4:58: error: binding reference of type ‘Gradient&&’ to ‘std::remove_reference<const Gradient&>::type’ {aka ‘const Gradient’} discards qualifiers\n    4 | int main(){const Gradient g{0,255};Gradient&& r=std::move(g);}\n      |                                                 ~~~~~~~~~^~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_owner_mutable_getter",
+      "diagnostic": "<build>/const_owner_mutable_getter.cpp: In member function ‘Gradient& Owner::get() const’:\n<build>/const_owner_mutable_getter.cpp:4:56: error: binding reference of type ‘Gradient&’ to ‘const Gradient’ discards qualifiers\n    4 | struct Owner{Gradient data;Gradient& get()const{return data;}};\n      |                                                        ^~~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "const_named_is_not_assignable",
+      "diagnostic": "<build>/const_named_is_not_assignable.cpp: In function ‘int main()’:\n<build>/const_named_is_not_assignable.cpp:4:50: error: passing ‘const Gradient’ as ‘this’ argument discards qualifiers [-fpermissive]\n    4 | int main(){const Gradient g{0,255};g=Gradient{1,2};}\n      |                                                  ^\nIn file included from <build>/const_named_is_not_assignable.cpp:1:\n./gradient.hpp:2:8: note:   in call to ‘constexpr Gradient& Gradient::operator=(Gradient&&)’\n    2 | struct Gradient {\n      |        ^~~~~~~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "unique_owner_copy",
+      "diagnostic": "<build>/unique_owner_copy.cpp: In function ‘int main()’:\n<build>/unique_owner_copy.cpp:5:51: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp = int; _Dp = std::default_delete<int>]’\n    5 | int main(){auto p=std::make_unique<int>(1);auto q=p;}\n      |                                                   ^\nIn file included from /usr/include/c++/13/memory:78,\n                 from <build>/unique_owner_copy.cpp:4:\n/usr/include/c++/13/bits/unique_ptr.h:522:7: note: declared here\n  522 |       unique_ptr(const unique_ptr&) = delete;\n      |       ^~~~~~~~~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "reference_member_assignment",
+      "diagnostic": "<build>/reference_member_assignment.cpp: In function ‘int main()’:\n<build>/reference_member_assignment.cpp:4:83: error: use of deleted function ‘View& View::operator=(const View&)’\n    4 | struct View{Gradient& data;};int main(){Gradient a{0,255},b{1,2};View x{a},y{b};x=y;}\n      |                                                                                   ^\n<build>/reference_member_assignment.cpp:4:8: note: ‘View& View::operator=(const View&)’ is implicitly deleted because the default definition would be ill-formed:\n    4 | struct View{Gradient& data;};int main(){Gradient a{0,255},b{1,2};View x{a},y{b};x=y;}\n      |        ^~~~\n<build>/reference_member_assignment.cpp:4:8: error: non-static reference member ‘Gradient& View::data’, cannot use default assignment operator\n"
+    }
+  ],
+  "warnings": [
+    {
+      "compiler": "GCC",
+      "case": "temporary forwarded through a reference-returning function; target not accessed",
+      "diagnostic": "./09_lifetime.cpp: In function ‘int main()’:\n./09_lifetime.cpp:27:41: warning: possibly dangling reference to a temporary [-Wdangling-reference]\n   27 |         [[maybe_unused]] const Watched& dangling = identity(make_watched());\n      |                                         ^~~~~~~~\n./09_lifetime.cpp:27:60: note: the temporary was destroyed at the end of the full expression ‘identity(make_watched()())’\n   27 |         [[maybe_unused]] const Watched& dangling = identity(make_watched());\n      |                                                    ~~~~~~~~^~~~~~~~~~~~~~~~\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "dangling return; not executed",
+      "diagnostic": "<build>/bad_reference.cpp:4:46: warning: reference to stack memory associated with local variable 'local' returned [-Wreturn-stack-address]\n    4 | Gradient& bad(){Gradient local{0,255};return local;}\n      |                                              ^~~~~\n1 warning generated.\n"
+    },
+    {
+      "compiler": "Clang",
+      "case": "return std::move(local)",
+      "diagnostic": "<build>/pessimizing.cpp:2:47: warning: moving a local object in a return statement prevents copy elision [-Wpessimizing-move]\n    2 | struct X{X(){};X(X&&){};};X make(){X x;return std::move(x);}\n      |                                               ^\n<build>/pessimizing.cpp:2:47: note: remove std::move call here\n    2 | struct X{X(){};X(X&&){};};X make(){X x;return std::move(x);}\n      |                                               ^~~~~~~~~~ ~\n1 warning generated.\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "dangling return; not executed",
+      "diagnostic": "<build>/bad_reference.cpp: In function ‘Gradient& bad()’:\n<build>/bad_reference.cpp:4:46: warning: reference to local variable ‘local’ returned [-Wreturn-local-addr]\n    4 | Gradient& bad(){Gradient local{0,255};return local;}\n      |                                              ^~~~~\n<build>/bad_reference.cpp:4:26: note: declared here\n    4 | Gradient& bad(){Gradient local{0,255};return local;}\n      |                          ^~~~~\n"
+    },
+    {
+      "compiler": "GCC",
+      "case": "return std::move(local)",
+      "diagnostic": "<build>/pessimizing.cpp: In function ‘X make()’:\n<build>/pessimizing.cpp:2:56: warning: moving a local object in a return statement prevents copy elision [-Wpessimizing-move]\n    2 | struct X{X(){};X(X&&){};};X make(){X x;return std::move(x);}\n      |                                               ~~~~~~~~~^~~\n<build>/pessimizing.cpp:2:56: note: remove ‘std::move’ call\n"
+    }
+  ],
+  "Clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+  "GCC_version": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "Clang_immobile_prvalue": "PASS with deleted copy/move and -fno-elide-constructors",
+  "GCC_immobile_prvalue": "PASS with deleted copy/move and -fno-elide-constructors",
+  "IR_checks": "PASS: local promotion, aggregate promotion, runtime choice, retained external-call storage",
+  "gpu": {
+    "flags": "-std=c++20 -arch=sm_61 -Xcompiler=-Wall,-Wextra",
+    "stdout": "GPU result: 11 21 31\nsame device address: true\nold storage empty: true\n",
+    "exit": 0,
+    "build_diagnostic": "",
+    "ptx": "gpu_buffer.ptx; virtual ISA, not final device machine code"
+  },
+  "source_sha256": {
+    "01_objects.cpp": "3d76fccce035f04f4a1c6a02f4717297ae20eb2f4ef54daab356fa6cbba2049e",
+    "02_pointers.cpp": "f00d326688d5fb405f2c798e9519e4fdd884ace496e9ab4c10a9e37a2bf76ee4",
+    "03_references.cpp": "ce24325c95d962820eac02cb895e0462a03b8b3645649cef2c6436d870e40e71",
+    "04_const.cpp": "ae767bacf93aed9d9ba70afbab7edc37f891ae8e5c4756bbf4cdcf11ca503cf5",
+    "05_arguments.cpp": "0c34d7f42bc0a1934c6aefd255edd9d5cd78b5f540053df07876c237890d6567",
+    "06_returns.cpp": "0feb32da2c29512da97aa35b6d626d28832ce1f863fad5b20a9e2879d3c28666",
+    "07_categories.cpp": "9df83df9585cb4b0fc0b6b39efaf9f4dcb0810ff986dc0ede1445b6141a27e3b",
+    "08_binding.cpp": "14f6adc72946086a4a86bc3f93e43f0449c03c5776761fa0994d11d32218a235",
+    "09_lifetime.cpp": "cdac2186d1fefd6e53184105d6cf67e5cdd34b1188bbd21342008a3d8c65d4b6",
+    "10_semantics.cpp": "35550de8e90038d0f9dd14f3ea265c419f745aa5d6e3d35d17d6c5c487bc9365",
+    "11_elision.cpp": "a3c20b2cc0e4a239079578395edb77dab8de543a806a961707f94427f62c822a",
+    "12_optimizer.cpp": "d293c8f3ce21917179b99708f76aed02567b68a55443cdfd0bd0ab3def865a3e",
+    "13_gpu_buffer.cu": "bfa119fbd2c9dbeb41469cb6b31f5c481e5f8beb15081230d39baeaa85efb638",
+    "gradient.hpp": "092a7b6a4fc93777fc03d27adac2623f309e88820b18b682583ddcfd574dc041",
+    "machine_cases.cpp": "d6fad161b6fcb265abf6da9fb80a43df231de70c36f817ab411753ebe13f386c",
+    "verify.py": "8fbe4d5c2fb858373b6739ae9e2bdc0a06f8170d64b141fec9bdbc184532cb51"
+  }
+}
