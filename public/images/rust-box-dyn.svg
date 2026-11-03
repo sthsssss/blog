@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-labelledby="title desc">
+  <title id="title">Box ownership and dyn dispatch</title>
+  <desc id="desc">A Box owns a heap value. A Box of dyn Trait also carries metadata for dispatch and cleanup of the concrete type.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#526b87"/></marker></defs>
+  <rect width="960" height="320" rx="16" fill="#f4f7fb"/>
+  <g font-family="ui-monospace, monospace" fill="#19324f">
+    <text x="40" y="45" font-size="23" font-weight="bold">Box: ownership / dyn: dispatch</text>
+    <rect x="40" y="75" width="260" height="65" rx="8" fill="#dce9f7"/>
+    <text x="65" y="115" font-size="22">Box&lt;T&gt;</text>
+    <rect x="580" y="75" width="330" height="65" rx="8" fill="#d6efe7"/>
+    <text x="605" y="115" font-size="22">T: concrete heap value</text>
+    <path d="M310 106H565" stroke="#526b87" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="385" y="94" font-size="16">owns</text>
+    <rect x="40" y="185" width="260" height="90" rx="8" fill="#dce9f7"/>
+    <text x="65" y="219" font-size="22">Box&lt;dyn Trait&gt;</text>
+    <text x="65" y="251" font-size="16">data + metadata</text>
+    <path d="M310 210H465V125H565" fill="none" stroke="#526b87" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M310 250H565" stroke="#526b87" stroke-width="2" marker-end="url(#arrow)"/>
+    <rect x="580" y="215" width="330" height="65" rx="8" fill="#f3e6cc"/>
+    <text x="605" y="255" font-size="21">vtable for concrete T</text>
+  </g>
+</svg>
