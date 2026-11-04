@@ -5,7 +5,7 @@ author: "Tae Shim"
 pubDate: 2026-11-04T08:11:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: 한 스레드의 인덱스에서 Rust GPU 추론까지"
+  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
 tags: ["cuda", "rust", "gpu", "cuda-commute"]
 ---
 
@@ -19,13 +19,13 @@ output[o] = bias[o]
 
 가장 단순한 GPU kernel은 전역 thread 인덱스를 출력 번호 `o`로 사용합니다. `o < outputs`인 thread만 실행하고, 그 thread가 모든 입력 `i`를 순회하며 하나의 누적합을 계산합니다.
 
-```rust
-let o = global_thread_index();
+```cpp
+unsigned int o = blockIdx.x * blockDim.x + threadIdx.x;
 
-if o < outputs {
-    let mut sum = bias[o];
+if (o < outputs) {
+    float sum = bias[o];
 
-    for i in 0..inputs {
+    for (unsigned int i = 0; i < inputs; ++i) {
         sum += weights[o * inputs + i] * input[i];
     }
 

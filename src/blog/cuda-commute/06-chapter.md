@@ -5,7 +5,7 @@ author: "Tae Shim"
 pubDate: 2026-11-04T08:06:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: 한 스레드의 인덱스에서 Rust GPU 추론까지"
+  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
 tags: ["cuda", "rust", "gpu", "cuda-commute"]
 ---
 
@@ -29,7 +29,7 @@ shared memory는 같은 block의 thread가 데이터를 재사용하고 협력�
 
 NVIDIA의 Best Practices Guide는 memory space를 위치·cache·접근 범위·수명으로 비교하고 있습니다. 이 표는 절대적인 한 사이클 비용표가 아니라 어떤 값을 어디에 둘지 판단하는 모델입니다. [Device Memory Spaces](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#device-memory-spaces)
 
-Rust 변수의 소유권과 CUDA memory space는 같은 개념이 아닙니다. host의 device buffer 객체가 global memory 할당의 해제 책임을 소유할 수 있지만, kernel의 raw pointer는 그 Rust 소유권을 가져오지 않습니다. 실행 중 유효한 주소와 범위를 제공하는 책임은 launch 계약에 남습니다.
+host language의 object lifetime과 CUDA memory space는 같은 개념이 아닙니다. host의 buffer wrapper가 global-memory allocation의 해제 책임을 관리할 수 있지만, kernel parameter로 전달된 device pointer가 그 host object를 소유하는 것은 아닙니다. GPU 실행이 끝날 때까지 유효한 allocation과 범위를 제공하는 책임은 launch contract에 남습니다.
 
 다음 편에서는 host의 값이 global memory에 도착하고, kernel 작업과 결과 복사가 stream에서 어떤 순서로 완료되는지 살펴봅니다.
 

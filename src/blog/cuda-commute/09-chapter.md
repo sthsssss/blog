@@ -5,7 +5,7 @@ author: "Tae Shim"
 pubDate: 2026-11-04T08:09:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: 한 스레드의 인덱스에서 Rust GPU 추론까지"
+  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
 tags: ["cuda", "rust", "gpu", "cuda-commute"]
 ---
 

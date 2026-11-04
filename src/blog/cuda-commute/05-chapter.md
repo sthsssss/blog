@@ -5,7 +5,7 @@ author: "Tae Shim"
 pubDate: 2026-11-04T08:05:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: 한 스레드의 인덱스에서 Rust GPU 추론까지"
+  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
 tags: ["cuda", "rust", "gpu", "cuda-commute"]
 ---
 
@@ -14,9 +14,9 @@ tags: ["cuda", "rust", "gpu", "cuda-commute"]
 
 probe의 경계 조건에서 마지막 warp를 생각해 봅니다.
 
-```rust
-if i < count {
-    unsafe { out.add(i as usize).write(3 * i + 7) };
+```cpp
+if (i < count) {
+    output[i] = 3 * i + 7;
 }
 ```
 

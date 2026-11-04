@@ -5,21 +5,22 @@ author: "Tae Shim"
 pubDate: 2026-11-04T08:07:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: 한 스레드의 인덱스에서 Rust GPU 추론까지"
+  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
 tags: ["cuda", "rust", "gpu", "cuda-commute"]
 ---
 
 
 host 메모리의 배열과 device global memory의 배열은 별도 저장 공간입니다. 일반적인 device allocation을 사용하는 경로에서는 입력을 host에서 device로 복사하고, kernel이 끝난 뒤 결과를 device에서 host로 복사합니다.
 
-```rust
-let device_input = stream.clone_htod(&host_input)?;
-let mut device_output = stream.alloc_zeros::<u32>(count)?;
+```cpp
+cudaMalloc(&device_input, bytes);
+cudaMalloc(&device_output, bytes);
+cudaMemcpy(device_input, host_input, bytes, cudaMemcpyHostToDevice);
 
-unsafe { launch.launch(config)? };
-stream.synchronize()?;
+fill_pattern<<<grid_size, block_size>>>(device_output, count);
+cudaDeviceSynchronize();
 
-let host_output = stream.clone_dtoh(&device_output)?;
+cudaMemcpy(host_output, device_output, bytes, cudaMemcpyDeviceToHost);
 ```
 
 **stream**은 GPU에 제출하는 작업의 순서를 나타냅니다. 같은 stream에 앞서 제출한 입력 복사, kernel, 결과 복사는 의존 순서대로 실행됩니다. CPU가 launch 함수를 반환받았다는 사실만으로 GPU 계산이 완료되었다고 결론 내릴 수는 없습니다.
@@ -30,6 +31,6 @@ NVIDIA Programming Guide의 [Asynchronous Execution](https://docs.nvidia.com/cud
 
 첫 구현에서는 stream 하나와 명시적 동기화로 정확성을 확인합니다. 이후 반복 추론에서 복사와 계산을 겹치려면 event나 여러 stream의 의존 관계를 별도로 설계합니다. 비동기화는 동기화 코드를 지우는 작업이 아니라, **어느 작업이 어느 작업을 기다려야 하는지 더 정확하게 표현하는 작업**입니다.
 
-다음 편에서는 왜 Rust 코드인데도 kernel launch가 `unsafe`인지, 어떤 오류가 launch 시점과 완료 시점에 나뉘는지 설명합니다.
+다음 편에서는 host와 device 사이에서 compiler가 증명하지 못하는 memory-safety contract와, launch 오류·완료 오류가 서로 다른 시점에 관찰되는 이유를 설명합니다. Rust API의 `unsafe`는 이 기존 CUDA contract를 source code에 표시하는 한 방법입니다.
 
 이전: [06 - GPU 메모리 공간](/posts/cuda-출근길-06-gpu-메모리-공간/). 다음: [08 - unsafe와 오류 경계](/posts/cuda-출근길-08-unsafe와-오류-경계/).
