@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+<title id="title">CUDA commute series</title>
+<desc id="desc">A Rust host launches GPU threads that map indices to memory and grow into a linear inference kernel.</desc>
+<rect width="1200" height="480" fill="#f3f7f4"/>
+<path d="M0 440H1200" stroke="#d7e4dc" stroke-width="2"/>
+<rect x="64" y="56" width="145" height="48" rx="24" fill="#2f7d32"/>
+<text x="136" y="88" font-family="system-ui,sans-serif" font-size="23" text-anchor="middle" fill="white">12 PARTS</text>
+<text x="64" y="193" font-family="system-ui,sans-serif" font-size="64" font-weight="700" fill="#193b2b">CUDA: thread to inference</text>
+<text x="68" y="247" font-family="system-ui,sans-serif" font-size="28" fill="#536d60">Grid · Warp · Memory · Synchronization · Linear</text>
+<g font-family="monospace" font-size="21" text-anchor="middle">
+<rect x="66" y="311" width="250" height="72" rx="12" fill="white" stroke="#b8d3c0"/>
+<text x="191" y="355" fill="#204c36">host.launch()</text>
+<path d="M334 347H405m-13-9 13 9-13 9" fill="none" stroke="#2f7d32" stroke-width="3"/>
+<rect x="426" y="311" width="286" height="72" rx="12" fill="white" stroke="#b8d3c0"/>
+<text x="569" y="355" fill="#204c36">i = block * 128 + t</text>
+<path d="M730 347H801m-13-9 13 9-13 9" fill="none" stroke="#2f7d32" stroke-width="3"/>
+<rect x="822" y="311" width="312" height="72" rx="12" fill="#193b2b"/>
+<text x="978" y="355" fill="#d9f3e0">output[o] = Σ w*x+b</text>
+</g></svg>
