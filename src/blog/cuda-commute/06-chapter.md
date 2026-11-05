@@ -1,36 +1,91 @@
 ---
 title: "CUDA 출근길 06 — GPU 메모리 공간"
-description: "register·local·shared·global memory를 접근 범위와 수명으로 구분합니다."
+description: "레지스터와 로컬·공유·전역 메모리의 범위, 수명 및 저장 특성을 비교합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:06:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "rust", "gpu", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
+CUDA의 메모리 공간은 접근할 수 있는 스레드의 범위와 수명이 다릅니다. 커널 안에 선언된 변수, 블록 안에서 공유하는 배열 및 여러 커널이 사용하는 장치 버퍼는 같은 저장 공간으로 취급되지 않습니다.
 
-GPU의 처리량은 계산기 수만으로 나오지 않습니다. 수많은 thread의 작업 상태를 가까운 register에 두고, block의 협력 데이터는 shared memory에 두며, 큰 데이터는 global memory에 보관하는 계층이 함께 필요합니다. 이 구조는 CPU cache의 이름만 바꾼 것이 아니라 대량의 독립 작업을 교대로 진행해 memory latency를 숨기려는 GPU 실행 모델과 맞물립니다.
+이 문서에서는 작은 커널에서 사용하는 값들을 기준으로 메모리 공간을 구분합니다. 먼저 각 값의 사용 범위를 확인한 뒤, 그 범위와 물리적 저장 위치가 어떻게 연결되는지 설명합니다.
 
-따라서 GPU의 모든 값이 같은 메모리에 저장되는 것은 아닙니다. CUDA의 메모리 공간은 접근할 수 있는 thread의 범위와 수명, 성능 특성이 다릅니다.
+## 커널에서 사용하는 값
 
-| 공간 | 주된 접근 범위 | 일반적인 수명 |
-| --- | --- | --- |
-| register | 한 thread | thread 실행 |
-| local memory | 한 thread | thread 실행 |
-| shared memory | 한 block | block 실행 |
-| global memory | device의 여러 thread와 host API | 할당부터 해제까지 |
+다음 코드는 입력 배열에 계수를 곱하여 출력 배열에 기록합니다.
 
-kernel의 지역 변수 `i`는 소스 수준에서 한 thread의 값입니다. 컴파일러는 가능한 경우 register에 배치합니다. register가 부족하거나 주소가 필요한 배열 같은 값은 local memory로 내려갈 수 있습니다. 이름은 local이지만 물리적으로 항상 빠른 on-chip 저장 공간이라는 뜻은 아닙니다.
+```cpp
+__global__ void Scale(
+    const float* input,
+    float* output,
+    float factor,
+    unsigned int count)
+{
+    unsigned int index =
+        blockIdx.x * blockDim.x + threadIdx.x;
 
-`out`이 가리키는 배열은 global memory에 있습니다. 여러 block의 thread가 접근할 수 있고 kernel 호출이 끝난 뒤에도 할당이 남습니다. 그래서 host가 결과를 다시 복사할 수 있습니다. 접근 범위가 넓은 대신 register나 shared memory보다 지연이 큽니다.
+    if (index < count)
+    {
+        float value = input[index];
+        output[index] = value * factor;
+    }
+}
+```
 
-shared memory는 같은 block의 thread가 데이터를 재사용하고 협력할 때 사용합니다. 다른 block은 같은 shared memory 인스턴스에 접근하지 않습니다. block이 끝나면 그 저장 내용도 유지되지 않습니다.
+각 스레드는 자신의 `index`와 `value`를 사용합니다. 반면 `input`과 `output`은 여러 스레드가 접근할 수 있는 배열을 가리킵니다. 스레드별 지역 변수와 배열의 원소는 사용 범위부터 다릅니다.
 
-NVIDIA의 Best Practices Guide는 memory space를 위치·cache·접근 범위·수명으로 비교하고 있습니다. 이 표는 절대적인 한 사이클 비용표가 아니라 어떤 값을 어디에 둘지 판단하는 모델입니다. [Device Memory Spaces](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#device-memory-spaces)
+`factor`는 모든 스레드에 동일한 인수로 제공됩니다. 하지만 값이 같다는 사실만으로 개발자가 선언한 공유 메모리가 되는 것은 아닙니다. 컴파일러는 커널 매개 변수 전달 규약에 따라 이 값을 처리합니다.
 
-host language의 object lifetime과 CUDA memory space는 같은 개념이 아닙니다. host의 buffer wrapper가 global-memory allocation의 해제 책임을 관리할 수 있지만, kernel parameter로 전달된 device pointer가 그 host object를 소유하는 것은 아닙니다. GPU 실행이 끝날 때까지 유효한 allocation과 범위를 제공하는 책임은 launch contract에 남습니다.
+## 스레드별 값과 레지스터
 
-다음 편에서는 host의 값이 global memory에 도착하고, kernel 작업과 결과 복사가 stream에서 어떤 순서로 완료되는지 살펴봅니다.
+컴파일러는 가능한 스레드별 값을 레지스터에 배치합니다. 레지스터는 실행 중인 스레드의 계산 상태를 보관하는 자원입니다. 소스에서 `index`를 한 번 선언해도 각 스레드는 자신의 인덱스 값을 사용합니다.
 
-이전: [05 - SIMT와 분기](/posts/cuda-출근길-05-simt와-분기/). 다음: [07 - 전송, stream, 동기화](/posts/cuda-출근길-07-전송-stream-동기화/).
+소스의 지역 변수와 하드웨어 레지스터 사이에 항상 일대일 대응이 있는 것은 아닙니다. 컴파일러는 상수를 계산해 없애거나 변수를 합칠 수 있습니다. 반대로 많은 값을 동시에 유지해야 하면 사용할 수 있는 레지스터가 부족할 수 있습니다.
+
+레지스터가 부족하여 일부 값을 다른 저장 공간으로 내리는 것을 스필이라고 합니다. 이때 스레드별 로컬 메모리가 사용될 수 있습니다. 주소 계산이 필요한 일부 배열도 로컬 메모리에 배치될 수 있습니다.
+
+CUDA에서 로컬 메모리의 “로컬”은 스레드 전용이라는 뜻입니다. 항상 SM 내부의 빠른 저장 공간이라는 뜻은 아닙니다. 로컬 메모리는 장치 메모리 계층을 사용하며 캐시의 영향을 받습니다. 따라서 C++ 코드에서 지역 변수를 선언했다는 이유만으로 비용을 레지스터 접근과 같다고 가정할 수 없습니다.
+
+## 블록의 공유 메모리
+
+공유 메모리는 같은 블록의 스레드가 함께 사용하는 저장 공간입니다. CUDA C++에서는 다음과 같이 선언할 수 있습니다.
+
+```cpp
+__shared__ float values[128];
+```
+
+블록마다 별도의 `values` 배열이 있습니다. 블록 0이 원소를 수정해도 블록 1의 배열이 바뀌지 않습니다. 배열은 블록 실행 동안 사용되며, 커널이 끝난 뒤 다음 호출의 저장 공간으로 유지되는 계약은 없습니다.
+
+공유 메모리는 한 스레드가 기록한 값을 다른 스레드가 재사용할 때 유용합니다. 대신 읽는 시점에 기록이 끝났음을 보장해야 합니다. 저장 공간을 공유한다는 사실과 실행 순서가 맞는다는 사실은 별개입니다. 이 순서는 배리어를 사용하여 표현합니다.
+
+## 커널 사이에 유지하는 전역 메모리
+
+호스트가 `cudaMalloc`으로 만든 버퍼는 일반적인 장치 전역 메모리 할당입니다. 같은 장치 작업의 여러 블록에서 접근할 수 있고, 커널 하나가 끝나도 할당을 해제하지 않으면 내용이 유지됩니다.
+
+따라서 첫 번째 커널이 출력을 기록하고 두 번째 커널이 그 출력을 입력으로 사용할 수 있습니다. 두 커널 사이에 적절한 실행 순서를 유지하면 중간값을 CPU로 복사할 필요가 없습니다.
+
+다만 전역 메모리에 접근할 수 있다는 사실이 스레드 간 동기화를 제공하지는 않습니다. 같은 위치에 동시에 기록하거나, 다른 스레드의 기록 완료를 가정하면 경합이 발생할 수 있습니다.
+
+| 공간 | 접근 범위 | 저장 내용의 일반적인 수명 | 주요 고려 사항 |
+| --- | --- | --- | --- |
+| 레지스터 | 스레드 | 스레드 실행 | 사용량이 동시 상주량에 영향을 줄 수 있음 |
+| 로컬 메모리 | 스레드 | 스레드 실행 | 장치 메모리 접근 비용이 발생할 수 있음 |
+| 공유 메모리 | 블록 | 블록 실행 | 재사용과 동기화, 용량을 함께 고려 |
+| 전역 메모리 | 장치의 여러 스레드 | 할당에서 해제까지 | 주소 배치와 전송 비용을 고려 |
+
+이 표는 주요 공간을 비교한 것입니다. CUDA에는 상수 메모리와 텍스처 접근 등 다른 기능도 있습니다. 처음부터 모든 공간을 사용하기보다 현재 값의 범위와 필요한 재사용을 기준으로 선택할 수 있습니다. NVIDIA의 [메모리 공간 비교](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#device-memory-spaces)에는 추가 특성이 정리되어 있습니다.
+
+## 아키텍처 변화와 저장 위치
+
+G80 이후 캐시와 공유 메모리의 구성은 바뀌었습니다. 예를 들어 Fermi는 계산에 사용할 캐시 계층을 강화했습니다. 캐시가 추가되어도 공유 메모리는 프로그램이 명시적으로 값을 배치하는 공간이고, 캐시는 메모리 접근을 하드웨어가 관리한다는 차이는 남습니다.
+
+따라서 “GPU에는 캐시가 없으므로 모든 데이터를 공유 메모리에 옮긴다”는 설명은 적절하지 않습니다. 원래 접근이 캐시에서 잘 처리되는 경우에는 명시적인 복사와 배리어가 오히려 비용을 늘릴 수 있습니다.
+
+다음 문서에서는 호스트 배열과 장치 전역 메모리 사이의 복사, 그리고 그 복사와 커널의 실행 순서를 설명합니다.
+
+## 다음 단계
+
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서](/posts/cuda-출근길-05-simt와-분기/) · [다음 문서](/posts/cuda-출근길-07-전송-stream-동기화/)

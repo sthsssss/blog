@@ -1,56 +1,91 @@
 ---
 title: "CUDA 출근길 부록 — 검증 기록"
-description: "Rust CUDA probe의 실제 실행 결과와 문서에서 설명만 한 항목을 분리해 기록합니다."
+description: "CUDA C++ 전체 예제의 빌드 방법, 실제 GPU 실행 결과 및 검증 범위를 설명합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:13:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "rust", "gpu", "cuda-commute", "verification"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute", "verification"]
 ---
 
-이 부록은 실제 장치에서 관찰한 결과와 문서의 설계 설명을 구분합니다. 글과 명령이 존재한다는 사실은 독자의 구현 완료나 CUDA 숙련을 뜻하지 않습니다.
+이 문서는 시리즈의 코드 예제를 빌드하고 실행하는 방법을 설명합니다. 전체 소스는 [examples.cu](/downloads/cuda-commute/examples.cu)에서 내려받을 수 있습니다. 소스에는 커널, 호스트 측 자원 관리, CUDA 오류 처리 및 결과 비교가 포함되어 있습니다.
 
-**검증된 환경**
+## 예제의 구성
 
-- GPU: NVIDIA GeForce GTX 1070
-- compute capability target: sm_61
-- GPU kernel 언어: Rust
-- kernel toolchain: nightly-2026-04-02
-- PTX target: 7.8
-- host: Rust와 cudarc
-- probe 원소 수: 257
-- block 크기: 128
+프로그램은 CPU의 `main`에서 시작합니다. 장치 0을 선택한 뒤 다음 검사를 순서대로 수행합니다.
 
-사용자가 실행한 명령은 다음과 같습니다.
+| 검사 | 입력 또는 실행 조건 | 확인하는 결과 |
+| --- | --- | --- |
+| 패턴 기록 | 원소 0, 1, 127, 128, 129, 257개 | 모든 유효 원소가 `3 * index + 7`과 일치 |
+| 스트림 처리 | 양수·0·음수를 포함한 원소 257개 | ReLU 결과 및 결과 복사 완료 |
+| 스트림 간 의존성 | 생성 스트림의 기록 후 소비 스트림에서 복사 | 이벤트 대기 뒤 배율 적용 결과 일치 |
+| 공유 메모리 | 값이 1인 원소 257개, 블록 크기 128 | 부분 합 `[128, 128, 1]` |
+| 선형 계층 | 입력 `[2, 3]`, 출력 2개 및 129개 | 첫 출력 쌍 `[8.5, 0.5]`과 반복된 기대값 |
+| 이벤트 시간 | 준비 실행 후 커널 100회 | 작업 완료 및 유한한 비음수 시간 반환 |
 
-```text
-cargo run --locked --features cuda --bin cuda-probe
+빈 입력 검사는 커널을 제출하지 않는 경로를 확인합니다. 선형 계층의 129개 출력 검사는 마지막 블록의 경계 처리를 포함합니다. 스트림 간 이벤트 검사는 실행 순서의 표현을 확인하며, 두 작업이 실제로 겹쳐 실행되었다고 주장하는 검사는 아닙니다.
+
+## 빌드 및 실행
+
+다음 명령은 CUDA Toolkit 12.6과 compute capability 6.1 장치를 대상으로 합니다. 소스 파일을 저장한 디렉터리에서 실행하세요.
+
+```bash
+nvcc -std=c++17 -O2 -arch=sm_61 examples.cu -o cuda-examples
+./cuda-examples
 ```
 
-보고된 결과는 257개 원소가 모두 `3 * index + 7`과 일치했다는 것입니다. 이는 context 생성, PTX module load, device buffer 할당, kernel launch, 완료 대기와 device-to-host 결과 확인 경로가 해당 장치에서 실행되었다는 증거입니다.
+`-std=c++17`은 C++ 언어 버전을 지정하고, `-O2`는 최적화를 활성화합니다. `-arch=sm_61`은 이 검증 환경의 GPU 대상을 지정합니다. 다른 GPU에서는 해당 장치와 도구 버전에 맞는 대상을 사용해야 합니다. 최신 CUDA 도구가 이 이전 GPU 대상을 지원한다고 가정하지 마세요.
 
-이 결과만으로 확인되지 않은 항목은 다음과 같습니다.
+예제 실행은 운영체제와 CUDA 드라이버가 장치를 사용할 수 있는 상태를 전제로 합니다. `nvcc`를 찾을 수 있다는 사실만으로 실제 GPU 실행 환경이 준비된 것은 아닙니다.
 
-- GPU linear kernel의 구현과 수치 일치
-- ReLU와 두 번째 linear를 포함한 GPU forward
-- CPU 대비 성능 향상
-- shared memory 또는 coalescing 최적화의 효과
-- 여러 stream의 overlap
-- sanitizer가 확인한 모든 메모리 접근
-- model accuracy의 GPU 재평가
+## 실제 실행 결과
 
-CPU linear와 저장된 NumPy 중간값의 비교는 별도 검증입니다. probe 성공을 신경망 GPU 추론 성공으로 합치지 않습니다.
+2026년 11월 5일 문서 예제를 다음 환경에서 컴파일하고 실행했습니다.
 
-시리즈의 09–12편은 성능과 이후 구현을 위한 설계 기준을 설명합니다. 실제 수치가 없는 곳에는 특정 속도 향상이나 bandwidth를 주장하지 않았습니다. GTX 1070과 최신 NVIDIA 문서의 기능 범위가 다를 수 있으므로 sm_61에서 지원하지 않는 최신 기능을 현재 구현에 적용했다고 서술하지 않습니다.
+| 항목 | 값 |
+| --- | --- |
+| GPU | NVIDIA GeForce GTX 1070 |
+| NVIDIA 드라이버 | 560.94 |
+| CUDA 컴파일러 | 12.6, V12.6.85 |
+| 대상 | `sm_61` |
+| 언어 모드 | C++17 |
 
-**다음 검증 순서**
+프로그램은 종료 코드 0으로 완료되었으며 다음 결과를 출력했습니다.
 
-1. 작은 hand-calculated shape에서 GPU linear와 CPU 결과를 비교합니다.
-2. 784→128과 128→10 각 층의 출력을 비교합니다.
-3. 10개 reference sample의 hidden linear·ReLU·logits를 비교합니다.
-4. 비정렬 출력 크기와 잘못된 shape를 검사합니다.
-5. 반복 추론에서 초기화와 kernel·전체 지연을 분리해 측정합니다.
-6. 기준 kernel을 보존한 뒤 최적화 하나씩 결과와 시간을 재측정합니다.
+```text
+PASS pattern: 0, 1, 127, 128, 129, 257
+PASS stream: ReLU and event dependency
+PASS shared memory: [128, 128, 1]
+PASS linear: [8.5, 0.5] and 129 outputs
+PASS event timing: completed 100 launches (not a benchmark)
+```
 
-전체 순서: [CUDA 출근길 시리즈](/posts/cuda-출근길-시리즈/).
+이 결과는 제공한 입력에 대해 코드 조각의 동작을 전체 프로그램에서 확인한 것입니다. 이벤트 시간은 API 사용과 완료 처리를 확인하는 데 사용했으며, 특정 성능 수치나 CPU 대비 가속률로 제시하지 않았습니다.
+
+## 자원 정리와 오류 처리
+
+호스트 메모리, 장치 메모리, 스트림 및 이벤트는 소멸자를 가진 C++ 래퍼가 관리합니다. 래퍼의 복사를 금지하여 같은 자원을 중복 해제하지 않도록 했습니다. 정상 실행에서는 완료와 오류를 명시적으로 검사한 뒤 자원을 정리합니다.
+
+스트림 예제는 버퍼보다 스트림이 먼저 정리되도록 생성 순서를 구성했습니다. 예외 경로에서도 진행 중인 작업의 완료를 가능한 범위에서 확인한 뒤 버퍼를 해제합니다. 소멸자에서는 예외를 던지지 않습니다. 비동기 실행 오류의 확인은 정상 경로의 명시적인 대기 호출에서 수행합니다.
+
+이 자원 관리 코드는 예제의 실행 구조를 완결하기 위한 것입니다. 임의 크기의 입력을 받는 범용 라이브러리, 다중 장치 관리자 또는 모든 장치 오류에서 복구하는 시스템은 아닙니다.
+
+## 검증 범위
+
+이번 검증에는 Compute Sanitizer를 사용한 메모리·경합 검사, 성능 프로파일링 및 다중 GPU 실행이 포함되지 않았습니다. 수치 비교에 사용한 입력도 제한적입니다. 실제 애플리케이션에서는 더 넓은 입력 범위와 수치 조건을 확인해야 합니다.
+
+공유 메모리 예제는 스레드 0이 부분 합을 직렬로 계산합니다. 이 코드는 배리어와 데이터 교환을 설명하기 위한 것이며 최적화된 병렬 합산 구현이 아닙니다. 선형 계층도 출력 하나를 스레드 하나에 배정한 기준 구현입니다.
+
+문서의 CUDA C++ 예제와 mini-infer의 Rust 학습 프로젝트는 별개입니다. 이전에 보고된 Rust GPU 패턴 검사는 해당 프로젝트의 도구 연결을 확인한 기록입니다. 이번 문서 예제의 실행 결과가 사용자의 GPU 추론 구현 완료를 의미하지는 않습니다.
+
+## 참고 문서
+
+역사적 배경은 당시 공시와 연구자의 원문을, API 동작은 NVIDIA의 공식 문서를 근거로 설명했습니다. 각 근거는 관련 본문에 연결되어 있습니다. 다음 자료는 전체 구조를 다시 확인할 때 사용할 수 있습니다.
+
+- [CUDA C++ Programming Guide 12.6](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-c-programming-guide/index.html): 예제 도구 버전의 프로그래밍 모델과 언어 기능
+- [CUDA Runtime API](https://docs.nvidia.com/cuda/cuda-runtime-api/index.html): 함수의 인수, 반환값 및 동기화 조건
+- [CUDA 부동소수점 설명](https://docs.nvidia.com/cuda/floating-point/index.html): 수치 결과 비교의 배경
+- [Microsoft의 WDDM 아키텍처](https://learn.microsoft.com/ko-kr/windows-hardware/drivers/display/windows-vista-and-later-display-driver-model-architecture): Windows GPU 관리 계층
+
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서: 자원 재사용과 측정](/posts/cuda-출근길-12-자원-재사용과-측정/)

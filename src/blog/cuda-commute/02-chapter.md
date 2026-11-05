@@ -1,163 +1,118 @@
 ---
 title: "CUDA 출근길 02 — kernel과 thread index"
-description: "CUDA C++ 확장, nvcc의 host/device 분리, PTX와 driver의 역할을 거쳐 각 thread가 출력 원소를 선택하는 과정을 설명합니다."
+description: "호스트의 진입점에서 커널 실행과 결과 복사까지 살펴보고 컴파일 과정과 PTX의 역할을 설명합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:02:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "cpp", "gpu", "ptx", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
-CUDA C++ program에는 CPU에서 실행되는 host code와 GPU에서 실행되는 device code가 함께 들어갈 수 있습니다. 두 code는 같은 source file에 있어도 같은 instruction set으로 compile되지 않습니다. `nvcc`는 CUDA syntax를 이해하는 compiler driver이며, host 부분은 platform C++ compiler와 연결하고 device 부분은 NVIDIA GPU compilation pipeline으로 보냅니다.
+CUDA 커널은 GPU의 여러 스레드가 실행하는 함수입니다. 호스트 코드는 커널에 사용할 인수와 실행할 스레드의 배치를 지정합니다. 각 스레드는 동일한 함수 본문을 실행하지만 자신의 인덱스를 사용하여 서로 다른 데이터를 처리할 수 있습니다.
 
-이 분리를 이해하면 CUDA를 “C++을 GPU가 직접 실행한다”라고 잘못 설명하지 않게 됩니다. GPU가 실행하는 것은 C++ source가 아니라 device compilation을 거쳐 만들어진 GPU machine code입니다. PTX는 source와 physical GPU instruction 사이에서 CUDA execution model을 보존하는 virtual ISA입니다.
+이 문서에서는 배열에 일정한 규칙의 값을 기록하는 프로그램을 사용합니다. CPU의 `main`에서 시작하여 GPU 작업을 제출하고, 결과를 다시 읽는 순서로 실행을 설명합니다. 이어서 이 코드가 PTX와 GPU 명령어로 변환되는 과정을 살펴봅니다.
 
-## CUDA C++은 무엇을 C++에 추가합니까
+## 호스트에서 프로그램 시작
 
-CUDA C++은 ISO C++ 위에 GPU execution을 표현하는 language extension과 library API를 추가합니다. 다음 kernel에는 대표적인 확장이 들어 있습니다.
+다음 코드는 전체 예제의 실행 순서를 간략하게 나타냅니다. `Check`는 CUDA API가 실패하면 오류를 보고하는 보조 함수입니다. 실제 프로그램의 정의와 정리 코드는 [전체 소스](/downloads/cuda-commute/examples.cu)를 참조하세요.
 
 ```cpp
-__global__ void fill_pattern(unsigned int* output, unsigned int count)
-{
-    unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+constexpr unsigned int count = 257;
+unsigned int* deviceOutput = nullptr;
+std::vector<unsigned int> hostOutput(count);
 
-    if (index < count) {
+Check(cudaMalloc(&deviceOutput, count * sizeof(unsigned int)));
+
+FillPattern<<<3, 128>>>(deviceOutput, count);
+Check(cudaGetLastError());
+Check(cudaDeviceSynchronize());
+
+Check(cudaMemcpy(
+    hostOutput.data(),
+    deviceOutput,
+    count * sizeof(unsigned int),
+    cudaMemcpyDeviceToHost));
+
+Check(cudaFree(deviceOutput));
+```
+
+`hostOutput`은 CPU에서 접근하는 결과 배열입니다. `cudaMalloc`은 GPU 계산에 사용할 메모리를 할당하고 그 주소를 `deviceOutput`에 기록합니다. 여기서 포인터 변수와 포인터가 가리키는 메모리는 다릅니다. CPU 코드가 포인터 값을 보관한다고 해서 일반 CPU 역참조로 해당 장치 메모리를 읽을 수 있는 것은 아닙니다.
+
+`FillPattern<<<3, 128>>>`은 블록 세 개, 블록당 스레드 128개로 커널을 제출합니다. `cudaGetLastError`로 제출 관련 오류를 확인하고, `cudaDeviceSynchronize`로 장치 작업의 완료를 기다립니다. 마지막으로 `cudaMemcpy`가 결과를 호스트 배열로 복사합니다. 복사가 성공한 뒤 CPU가 `hostOutput`의 원소를 검사할 수 있습니다.
+
+커널 호출은 C++의 일반 함수 호출과 다릅니다. CPU가 함수 본문을 실행하여 결과를 반환하는 대신 GPU 작업을 제출합니다. 완료 대기를 별도로 표현하는 이유도 여기에 있습니다.
+
+## 스레드별 작업 선택
+
+앞에서 호출한 커널은 다음과 같습니다.
+
+```cpp
+__global__ void FillPattern(
+    unsigned int* output,
+    unsigned int count)
+{
+    unsigned int index =
+        blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (index < count)
+    {
         output[index] = 3 * index + 7;
     }
 }
 ```
 
-`__global__`은 함수의 호출자와 실행 위치를 지정합니다. host가 함수를 launch하고 device thread들이 본문을 실행합니다. `threadIdx`, `blockIdx`와 `blockDim`은 library의 보통 global variable이 아니라 compiler와 GPU execution environment가 제공하는 built-in variable입니다.
+`__global__`은 이 함수가 GPU 커널 진입점임을 나타냅니다. 함수의 매개 변수는 출력 메모리의 주소와 유효 원소 수입니다. 이 예제에서 커널은 값을 반환하지 않고 전달받은 메모리에 결과를 기록합니다.
 
-host code는 kernel을 일반 함수 호출과 다른 syntax로 launch합니다.
+`threadIdx.x`는 블록 안의 스레드 번호이고, `blockIdx.x`는 그리드 안의 블록 번호입니다. `blockDim.x`는 블록당 스레드 수입니다. 세 값을 조합하면 배열 전체에서 사용할 인덱스를 계산할 수 있습니다.
 
-```cpp
-fill_pattern<<<3, 128>>>(device_output, 257);
-```
-
-`<<<3, 128>>>`은 return value를 받는 C++ operator가 아닙니다. CUDA compiler가 해석하는 execution configuration입니다. 이 호출은 block 3개, block당 thread 128개로 구성된 grid를 제출합니다. CPU는 kernel body를 한 번 실행하는 대신 driver/runtime에 GPU work를 제출합니다.
-
-execution-space 지정자는 함수 관계를 더 세밀하게 표현합니다.
-
-| 지정자 | 호출 위치 | 실행 위치 |
+| 실행 위치 | 인덱스 계산 | 기록할 값 |
 | --- | --- | --- |
-| `__host__` | host | CPU |
-| `__device__` | device code | GPU |
-| `__global__` | host | GPU kernel |
+| 블록 0, 스레드 0 | `0 * 128 + 0 = 0` | `7` |
+| 블록 0, 스레드 1 | `0 * 128 + 1 = 1` | `10` |
+| 블록 1, 스레드 0 | `1 * 128 + 0 = 128` | `391` |
+| 블록 2, 스레드 0 | `2 * 128 + 0 = 256` | `775` |
 
-`__host__ __device__`를 함께 붙이면 compiler는 CPU version과 GPU version을 각각 생성할 수 있습니다. 그러나 두 target이 지원하는 library와 behavior가 같아지는 것은 아닙니다. 한 source language를 사용해도 allocation, address space와 execution environment는 분리됩니다.
+이 배치는 스레드 384개를 요청하지만 배열에는 원소 257개만 있습니다. `index < count` 조건은 배열 밖의 스레드가 메모리에 기록하지 않도록 합니다. 실행 수와 배열 크기의 관계는 다음 문서에서 자세히 설명합니다.
 
-## nvcc는 하나의 compiler executable이지만 모든 code를 혼자 처리하지 않습니다
+이 계산에서는 각 스레드가 다른 원소에 기록합니다. 따라서 블록 1이 블록 0보다 먼저 실행되어도 결과는 같습니다. CUDA가 원소 순서대로 스레드를 실행한다고 가정할 필요가 없습니다.
 
-`nvcc`는 CUDA compilation의 단계를 조정하는 compiler driver입니다. 현재 toolchain의 세부 구현은 version과 option에 따라 달라질 수 있지만, developer가 관찰해야 하는 논리적 흐름은 다음과 같습니다.
+## CUDA C++과 일반 C++의 경계
 
-```text
-CUDA C++ translation unit
-        │
-        ├─ host code ──▶ generated host C++ ──▶ MSVC/GCC/Clang ──▶ CPU object
-        │
-        └─ device code ─▶ NVIDIA device compiler
-                               │
-                               ├─ PTX virtual ISA
-                               └─ cubin: 특정 GPU용 binary
+CUDA C++은 C++에 실행 위치를 나타내는 지정자, 커널 실행 구문 및 관련 기능을 추가합니다. `__global__`과 `<<<...>>>`는 일반 ISO C++ 컴파일러가 그대로 처리하는 구문이 아닙니다. CUDA 도구가 이 구문을 처리해야 합니다.
 
-CPU object + embedded device image ──▶ executable / library
-```
+반면 `std::vector`, 조건문과 정수 계산을 모두 새로운 언어로 다시 정의하는 것은 아닙니다. 호스트 코드는 C++ 환경을 사용하며, 장치 코드는 GPU 대상에서 지원하는 C++ 기능과 라이브러리를 사용합니다. 언어가 같아도 두 실행 환경에서 모든 기능을 동일하게 사용할 수 있는 것은 아닙니다.
 
-host compiler는 `<<<...>>>` syntax를 직접 이해할 필요가 없습니다. `nvcc`가 launch를 CUDA runtime 호출로 변환하고, host compiler가 처리할 형태를 준비합니다. device function은 NVIDIA compiler가 GPU용으로 compile합니다. 결과 executable에는 특정 architecture용 binary와 PTX가 하나 이상의 **fat binary** 형태로 포함될 수 있습니다.
+초기의 CUDA가 C 기반으로 소개되었다는 역사와 현재 CUDA C++의 기능 범위도 구분해야 합니다. 이 문서의 코드는 현재 표기를 사용하며 2007년 도구에서 그대로 빌드할 수 있는 예제로 제시하는 것은 아닙니다.
 
-NVIDIA의 현재 [CUDA Compiler Driver documentation](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/)은 `nvcc`가 host compilation과 device compilation을 조정하고, host compiler를 사용하며, device code를 cubin이나 fatbin으로 생성하는 option을 정의합니다. 이 문서는 compiler driver의 현재 계약을 설명합니다. 2007년의 내부 pipeline이 현재와 완전히 같았다고 소급해서 읽어서는 안 되지만, host/device 분리와 PTX라는 기본 구조는 초기 CUDA부터 존재했습니다.
+## 컴파일 과정과 PTX
 
-## PTX는 GPU assembly처럼 보이지만 physical machine ISA는 아닙니다
-
-PTX는 **Parallel Thread Execution**의 약자이며 NVIDIA가 정의한 virtual instruction set architecture입니다. register, load/store, arithmetic, branch와 thread index를 읽는 special register를 표현하지만, 특정 GPU chip의 binary encoding을 고정하지 않습니다.
-
-간단한 kernel의 PTX에는 다음과 비슷한 동작이 나타납니다. 실제 register 이름과 instruction 선택은 compiler version과 optimization에 따라 달라집니다.
+NVIDIA의 컴파일러 드라이버 `nvcc`는 호스트 코드와 장치 코드의 컴파일을 조정합니다. 호스트 코드는 호스트 C++ 컴파일러로 처리하고, 장치 코드는 GPU용 컴파일 경로로 처리합니다.
 
 ```text
-mov.u32  %r1, %ctaid.x;   // blockIdx.x
-mov.u32  %r2, %ntid.x;    // blockDim.x
-mov.u32  %r3, %tid.x;     // threadIdx.x
-mad.lo.u32 %r4, %r1, %r2, %r3;
+CUDA C++ 소스
+    ├─ 호스트 코드 → 호스트 C++ 컴파일러 → CPU 코드
+    └─ 장치 코드   → 장치 컴파일러 → PTX → GPU 기계어
+
+CPU 코드 + 장치 코드 이미지 → 실행 파일
 ```
 
-`%ctaid.x`, `%ntid.x`, `%tid.x`는 CUDA C++의 built-in index가 PTX에서 읽는 special register입니다. `mad.lo.u32`는 곱셈과 덧셈으로 global index를 만듭니다. 이 correspondence는 C++ syntax가 어떻게 GPU execution model로 내려가는지 보여 줍니다.
+PTX는 가상 명령어 집합입니다. 실제 GPU가 PTX 텍스트를 그대로 실행하는 것은 아닙니다. 빌드할 때 `ptxas`가 대상 GPU용 코드를 생성하거나, 드라이버가 포함된 PTX에서 실행 시점에 코드를 생성할 수 있습니다. 특정 GPU용 바이너리는 cubin으로, 여러 장치 코드 이미지를 포함하는 묶음은 fat binary로 다룹니다.
 
-PTX가 virtual ISA인 이유는 GPU architecture가 세대마다 변하기 때문입니다. application이 PTX를 포함하면 CUDA driver는 현재 장치에 맞는 machine code를 JIT compile할 수 있습니다. 반대로 build 시점에 `ptxas`가 특정 compute capability의 cubin을 만들면 load 시 JIT 비용을 줄이고 build 당시 code generation을 사용할 수 있습니다. 실제 배포물은 compatibility와 startup cost를 위해 여러 cubin과 PTX를 함께 포함할 수 있습니다.
+이 방식에서는 컴파일 결과와 실행 환경을 따로 확인할 수 있습니다. PTX 생성에 성공해도 설치된 드라이버가 그 PTX 버전을 지원하지 않으면 적재에 실패할 수 있습니다. 반대로 적합한 GPU 바이너리가 포함되어 있으면 실행할 때마다 PTX를 새로 컴파일할 필요는 없습니다.
 
-NVIDIA의 [PTX ISA specification](https://docs.nvidia.com/cuda/parallel-thread-execution/)은 PTX를 abstract GPU machine을 위한 ISA로 정의합니다. NVIDIA의 [PTX 해설](https://developer.nvidia.com/blog/understanding-ptx-the-assembly-language-of-cuda-gpu-computing/)은 PTX가 final machine code가 아니며, `ptxas` 또는 driver JIT가 실제 GPU binary로 변환한다고 설명합니다.
+NVIDIA의 [컴파일러 드라이버 설명](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/)은 이러한 호스트·장치 코드 분리와 장치 이미지 생성 과정을 정의합니다. [PTX 설명](https://developer.nvidia.com/blog/understanding-ptx-the-assembly-language-of-cuda-gpu-computing/)은 가상 명령어와 실제 GPU 명령어의 관계를 별도로 설명합니다.
 
-## runtime API와 driver API는 compiler 아래의 실행 계층입니다
+## 실행 라이브러리와 드라이버
 
-compile이 끝나도 GPU는 자동으로 실행되지 않습니다. process는 GPU context를 만들고, device memory를 할당하고, module과 kernel을 찾고, argument와 execution configuration을 제출해야 합니다.
+앞의 `cudaMalloc`과 `cudaMemcpy`는 CUDA Runtime API입니다. 애플리케이션은 이 API를 통해 장치 메모리와 실행을 관리합니다. 더 명시적인 컨텍스트·모듈 관리를 수행하려면 CUDA Driver API의 `cuModuleLoad`, `cuLaunchKernel` 등을 사용할 수 있습니다.
 
-CUDA는 두 API 수준을 제공합니다.
+여기서 드라이버 API는 `nvcc`와 다릅니다. `nvcc`는 빌드 도구이고, 드라이버 API는 실행 중 장치 작업을 다루는 인터페이스입니다. 컴파일러 드라이버라는 이름과 GPU 장치 드라이버라는 이름에서 사용하는 “드라이버”를 구분해야 합니다.
 
-| 계층 | 대표 이름 | 역할 |
-| --- | --- | --- |
-| CUDA Runtime API | `cudaMalloc`, `cudaMemcpy`, kernel launch syntax | context와 module의 일반 작업을 편리하게 관리 |
-| CUDA Driver API | `cuCtxCreate`, `cuModuleLoad`, `cuLaunchKernel` | context·module·function과 launch를 더 명시적으로 관리 |
+이 관계는 다른 언어로 CUDA를 사용할 때도 유지됩니다. 예를 들어 별도의 컴파일러가 PTX를 생성하고 호스트 언어의 바인딩이 Driver API로 커널을 실행할 수 있습니다. CUDA C++은 대표적인 개발 경로이지만 PTX 아래의 실행 모델이 C++ 구문만을 위한 것은 아닙니다.
 
-Runtime API가 driver를 대체하는 별도 GPU path는 아닙니다. runtime implementation은 CUDA driver 기능 위에서 더 높은 수준의 lifecycle과 launch 편의를 제공합니다. application이나 language binding은 driver API를 직접 사용할 수도 있습니다.
+이제 계산식, 실행 배치 및 컴파일 경로를 구분할 수 있습니다. 다음 문서에서는 배열 크기가 달라졌을 때 실행 배치를 계산하고 범위 검사를 유지하는 방법을 설명합니다.
 
-```text
-CUDA C++ application
-       ↓ Runtime API
-CUDA user-mode driver API
-       ↓ OS driver / GPU command submission
-NVIDIA GPU
-```
+## 다음 단계
 
-Windows의 display GPU에서는 아래쪽 command scheduling과 video-memory management가 WDDM의 영향도 받습니다. 그러나 CUDA kernel은 Direct3D shader pipeline을 통과하지 않습니다. Direct3D와 CUDA는 위쪽 compiler와 API가 다르며, 아래에서 동일한 physical GPU와 OS/vendor driver infrastructure를 공유할 수 있습니다.
-
-## 같은 kernel body에서 thread마다 다른 원소를 선택합니다
-
-compiler와 driver가 kernel을 준비한 뒤에는 launch된 모든 thread가 `fill_pattern`의 같은 instruction sequence에서 시작합니다. 각 thread가 서로 다른 원소를 처리하게 만드는 값은 execution configuration과 built-in index입니다.
-
-```cpp
-unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
-```
-
-1차원 grid에서 각 값은 다음 의미를 가집니다.
-
-| 값 | 의미 | `<<<3, 128>>>`에서의 범위 |
-| --- | --- | --- |
-| `threadIdx.x` | 현재 block 안의 thread 번호 | 0–127 |
-| `blockIdx.x` | grid 안의 block 번호 | 0–2 |
-| `blockDim.x` | block마다 배치된 thread 수 | 128 |
-
-global index 계산은 block별 local index를 전체 grid의 연속 index로 바꿉니다.
-
-```text
-block 0: 0 × 128 + threadIdx.x → 0 ... 127
-block 1: 1 × 128 + threadIdx.x → 128 ... 255
-block 2: 2 × 128 + threadIdx.x → 256 ... 383
-```
-
-thread 384개가 실행되지만 output은 257개뿐입니다. 따라서 kernel은 유효 범위를 검사합니다.
-
-```cpp
-if (index < count) {
-    output[index] = 3 * index + 7;
-}
-```
-
-index 0–256인 thread만 memory를 씁니다. 나머지 thread는 조건을 통과하지 않습니다. CUDA가 자동으로 array length를 알아내는 것이 아니라 host가 `count`를 argument로 전달하고 device code가 그 계약을 지킵니다.
-
-“thread 하나가 원소 하나를 처리한다”는 CUDA의 고정 규칙도 아닙니다. 이 kernel이 선택한 work mapping입니다. thread 하나가 loop로 여러 원소를 처리하거나, 여러 thread가 하나의 결과를 reduction할 수도 있습니다. 첫 예제에서는 1:1 mapping이 index, memory write와 검증 결과를 가장 직접적으로 연결합니다.
-
-## Rust kernel은 CUDA의 기원이 아니라 같은 device 계층의 다른 frontend입니다
-
-mini-infer는 학습 project의 단일 언어 결정을 위해 Rust host와 Rust kernel을 사용합니다. Rust compiler의 LLVM NVPTX backend는 CUDA C++ device compiler 대신 PTX를 생성하고, `cudarc`는 CUDA Driver API를 호출합니다.
-
-```text
-CUDA C++: source ─▶ nvcc/device compiler ─▶ PTX/cubin ─▶ CUDA driver
-Rust:      source ─▶ rustc/LLVM NVPTX     ─▶ PTX       ─▶ CUDA driver
-```
-
-두 경로는 frontend language와 compiler가 다릅니다. PTX 아래의 module load, device memory, launch configuration과 GPU execution model은 공유합니다. 따라서 CUDA의 역사와 표준 programming model을 설명할 때에는 CUDA C++이 기준이고, mini-infer의 Rust code는 그 architecture에 접속하는 별도 frontend 사례입니다.
-
-다음 편에서는 output 257개에 block size 128을 선택했을 때 grid size가 왜 3이 되는지 설명합니다. 이 계산은 특정 GPU의 SM 개수와 무관하게 같은 kernel을 launch하도록 만드는 CUDA scalability model의 첫 부분입니다.
-
-이전: [01 - PTX에서 시작하는 GPU의 역사](/posts/cuda-출근길-01-ptx에서-시작하는-gpu의-역사/). 다음: [03 - launch 크기와 경계 검사](/posts/cuda-출근길-03-launch-크기와-경계-검사/).
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서](/posts/cuda-출근길-01-ptx에서-시작하는-gpu의-역사/) · [다음 문서](/posts/cuda-출근길-03-launch-크기와-경계-검사/)

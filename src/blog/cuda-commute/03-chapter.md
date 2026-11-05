@@ -1,43 +1,91 @@
 ---
 title: "CUDA 출근길 03 — launch 크기와 경계 검사"
-description: "원소 수를 block 크기로 올림하고 초과 thread의 메모리 접근을 막습니다."
+description: "원소 수로 블록 수를 계산하고 빈 입력 및 마지막 블록의 범위를 처리합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:03:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "rust", "gpu", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
+커널 실행 구성은 GPU에서 실행할 스레드의 논리적인 배치를 지정합니다. 배열의 원소 수와 실행할 스레드 수는 서로 관련되지만 항상 같지는 않습니다. 블록은 일정한 수의 스레드로 구성되므로, 배열의 마지막 부분을 처리하기 위해 여분의 스레드가 필요할 수 있습니다.
 
-CUDA의 scalability model은 application이 “G80의 processor 몇 번에서 실행하라”고 지정하지 않는 데서 시작합니다. host는 처리할 work를 grid와 block으로 표현하고, GPU scheduler는 현재 장치의 streaming multiprocessor에 block을 배치합니다. 같은 launch가 SM 수가 다른 GPU에서도 의미를 유지하는 이유입니다.
+이 문서에서는 임의의 배열 크기에 대해 블록 수를 계산하는 방법을 설명합니다. 앞 문서의 `FillPattern` 커널을 그대로 사용하고, 호스트에서 실행 크기를 계산하는 부분만 변경합니다.
 
-출력이 257개이고 한 block에 128개 thread가 있으면 block 두 개로는 256개 원소만 처리합니다. 마지막 원소를 처리하려면 세 번째 block이 필요합니다.
+## 필요한 블록 수 계산
 
-```cpp
-constexpr unsigned int count = 257;
-constexpr unsigned int block_size = 128;
-unsigned int grid_size = (count + block_size - 1) / block_size;
+블록당 스레드 수를 128로 선택했다고 가정합니다. 원소 256개에는 블록 두 개가 필요합니다. 원소가 257개이면 블록 두 개로 마지막 원소를 처리할 수 없으므로 블록 하나를 더 실행해야 합니다.
 
-fill_pattern<<<grid_size, block_size>>>(device_output, count);
-```
-
-`div_ceil`은 나눗셈 결과를 올림합니다. `257.div_ceil(128)`은 3입니다. 따라서 host는 3 × 128 = 384개 thread가 있는 grid를 요청합니다. 필요한 원소보다 127개 thread가 많습니다.
-
-CUDA launch는 마지막 block만 1개 thread로 줄이는 방식이 아닙니다. 같은 grid 차원의 모든 block은 같은 block 차원을 사용합니다. 그래서 kernel이 유효 범위를 검사합니다.
+다음 함수는 원소 수를 받아 필요한 블록 수를 계산합니다.
 
 ```cpp
-if (i < count) {
-    output[i] = 3 * i + 7;
+void LaunchPattern(unsigned int* output, unsigned int count)
+{
+    if (count == 0)
+    {
+        return;
+    }
+
+    constexpr unsigned int blockSize = 128;
+    unsigned int gridSize =
+        count / blockSize + (count % blockSize != 0);
+
+    FillPattern<<<gridSize, blockSize>>>(output, count);
+    Check(cudaGetLastError());
 }
 ```
 
-인덱스 0–256의 thread만 씁니다. 257–383의 thread는 조건을 통과하지 않으며 포인터 계산과 쓰기를 수행하지 않습니다. 이 검사는 “마지막 block에 여분 thread가 있다”는 host의 launch 선택과 짝을 이룹니다.
+정수 나눗셈은 나머지를 버립니다. 따라서 `count / blockSize`는 완전히 채울 수 있는 블록 수입니다. 나머지가 0이 아니면 부분적으로 사용할 블록 하나를 더합니다. 비교식의 `true`는 이 덧셈에서 1로 변환됩니다.
 
-`count = 256`이면 block은 정확히 두 개입니다. 그래도 같은 경계 검사를 유지하면 kernel의 계약이 분명하고, 다음에 입력 크기가 바뀌어도 안전한 범위를 보존합니다. `count = 0`은 별도 조건입니다. 일부 launch API와 설정은 0개의 block을 유효한 작업으로 다루지 않으므로 host에서 빈 입력을 처리하는 편이 명확합니다.
+이 식은 `count + blockSize - 1`을 먼저 계산하지 않으므로 그 덧셈에서 발생할 수 있는 오버플로를 피합니다. 다만 매우 큰 작업을 지원하는 일반 라이브러리에서는 인덱스 타입과 장치의 최대 그리드 크기도 별도로 검사해야 합니다. 이 예제는 `unsigned int`로 표현 가능한 작은 배열을 대상으로 합니다.
 
-실제 project에서는 launch helper가 이 올림 계산을 감쌀 수 있습니다. 첫 예제에서는 `grid_size` 계산과 kernel의 범위 검사가 서로 대응한다는 사실을 보이기 위해 식을 직접 작성합니다.
+| 원소 수 | 블록 수 | 전체 스레드 수 | 기록하지 않는 스레드 수 |
+| ---: | ---: | ---: | ---: |
+| 1 | 1 | 128 | 127 |
+| 128 | 1 | 128 | 0 |
+| 129 | 2 | 256 | 127 |
+| 256 | 2 | 256 | 0 |
+| 257 | 3 | 384 | 127 |
 
-이제 thread와 block의 번호는 계산할 수 있습니다. 다음 편에서는 이 프로그래밍 계층과 GPU가 실제 명령을 발행하는 warp를 구분합니다.
+빈 배열에서는 함수를 즉시 반환합니다. 이 함수가 작업을 제출하지 않는 것과 원소가 있는 작업을 제출한 뒤 완료를 기다리는 것은 다른 경우입니다. 호출자는 어떤 경로인지 구분할 수 있습니다.
 
-이전: [02 - kernel과 thread index](/posts/cuda-출근길-02-kernel과-thread-index/). 다음: [04 - grid, block, warp](/posts/cuda-출근길-04-grid-block-warp/).
+## 커널에서 유효 범위 확인
+
+블록 세 개를 요청하면 마지막 블록도 스레드 128개로 구성됩니다. 호스트가 마지막 블록의 스레드 수만 다르게 지정하지는 않습니다. 따라서 장치 코드가 각 스레드의 인덱스를 검사합니다.
+
+```cpp
+unsigned int index =
+    blockIdx.x * blockDim.x + threadIdx.x;
+
+if (index < count)
+{
+    output[index] = 3 * index + 7;
+}
+```
+
+`count`가 257이면 인덱스 256인 스레드까지 배열에 기록합니다. 인덱스 257 이상인 스레드는 조건을 통과하지 않으므로 배열 원소에 접근하지 않습니다.
+
+이 검사는 잘못된 메모리 할당까지 보완하지는 않습니다. 호스트가 원소 200개만 할당하고 `count`를 257로 전달하면 커널의 조건은 잘못된 범위를 허용합니다. 할당 크기, 전달한 원소 수 및 커널의 인덱스 계산이 함께 일치해야 합니다.
+
+경계 검사는 실행 크기를 올림한 결과를 다루는 장치 측 계약입니다. 배열 길이를 자동으로 추론하는 기능이나 모든 포인터 오류를 검출하는 기능이 아닙니다.
+
+## 실행 수와 동시 실행 수 구분
+
+스레드 384개를 요청했다는 말은 GPU가 384개를 같은 시각에 모두 실행한다는 뜻이 아닙니다. 실행할 수 있는 양은 장치의 자원과 커널이 사용하는 레지스터·공유 메모리 등에 따라 달라집니다. 배치되지 않은 블록은 실행 자원을 사용할 수 있을 때 처리됩니다.
+
+이 구분 때문에 애플리케이션은 물리적인 연산 장치 수를 배열 크기에 직접 대응시킬 필요가 없습니다. 데이터가 늘어나면 논리적인 작업 수를 늘리고, 실제 배치는 GPU에 맡깁니다. 블록 안에서 협력하는 규칙은 유지하면서 서로 다른 규모의 GPU를 사용할 수 있습니다.
+
+NVIDIA의 [커널 작성 문서](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html)는 이러한 스레드 계층과 인덱스 구성을 설명합니다. 구체적인 실행 한계는 대상 장치의 속성을 확인해야 합니다.
+
+## 경계 크기로 동작 확인
+
+실행 크기를 검증할 때에는 블록 크기의 배수만 사용하지 마세요. 원소 하나, 블록 크기와 같은 배열, 블록 크기보다 하나 작은 배열 및 하나 큰 배열을 함께 확인하면 마지막 블록의 처리를 검사할 수 있습니다.
+
+전체 예제는 1, 127, 128, 129, 257개에 대해 모든 결과를 계산식과 비교합니다. 0개에서는 실행을 건너뜁니다. 이러한 검사는 실행 배치와 배열 범위의 대응을 확인하기 위한 것이며, 커널 성능을 평가하는 벤치마크는 아닙니다.
+
+다음 문서에서는 블록이 GPU의 실행 자원에 배치된 뒤 워프라는 단위로 처리되는 과정을 설명합니다.
+
+## 다음 단계
+
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서](/posts/cuda-출근길-02-kernel과-thread-index/) · [다음 문서](/posts/cuda-출근길-04-grid-block-warp/)

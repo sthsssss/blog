@@ -1,135 +1,76 @@
 ---
 title: "CUDA 출근길 01 — PTX에서 시작하는 GPU의 역사"
-description: "그래픽 시장의 GPU가 NVIDIA의 컴퓨팅 플랫폼이 된 사업적 배경, G80 architecture, CUDA C의 공개와 초기 개발자 반응을 연결합니다."
+description: "초기 GPGPU의 제약, NVIDIA의 제품 전략, 실제 도입 연구 및 GPU 아키텍처의 변화를 설명합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:01:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "cpp", "gpu", "ptx", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
-CUDA는 NVIDIA GPU를 범용 병렬 processor로 사용하는 proprietary computing platform입니다. 개발자는 CUDA C++로 host code와 GPU kernel을 작성하고, CUDA toolchain과 driver는 code compilation, device memory, kernel launch와 synchronization을 처리합니다. 이 platform은 GPU에 원래 없던 계산 능력을 추가한 것이 아니라, graphics pipeline 안에 갇혀 있던 programmable hardware를 일반 개발자가 직접 사용할 수 있도록 만든 것입니다.
+CUDA는 그래픽스 API를 사용하지 않고 NVIDIA GPU에 계산 작업을 제출할 수 있는 개발 환경을 제공합니다. 이 환경에는 언어 확장뿐 아니라 컴파일러, 실행 라이브러리, 드라이버 및 이를 지원하는 하드웨어가 포함됩니다. PTX는 그중 컴파일러가 생성하는 가상 명령어 집합입니다. 특정 GPU의 실제 명령어와 프로그램 사이에 중간 계층을 두어, 소스 언어와 GPU 세대가 바뀌는 문제를 분리합니다.
 
-CUDA의 등장은 언어 기능 하나의 발명으로 설명되지 않습니다. NVIDIA는 GPU architecture를 바꾸고, 그 architecture를 일반 계산에 노출하는 programming model을 설계하고, C compiler와 library를 제공하고, 계산 전용 Tesla 제품을 판매했습니다. 하드웨어와 소프트웨어를 함께 만든 선택이 CUDA를 SDK가 아니라 장기적인 사업 platform으로 만들었습니다.
+이 문서에서는 CUDA와 PTX가 필요해진 배경을 설명합니다. GPU를 일반 계산에 사용하던 초기 방식에서 시작하여 NVIDIA의 제품 전략, 초기 개발자의 경험 및 이후 하드웨어의 변화를 살펴봅니다. 다음 문서에서는 이 배경을 실제 CUDA C++ 프로그램의 컴파일 과정에 연결합니다.
 
-## CUDA 이전에는 계산을 그래픽처럼 표현했습니다
+## 그래픽 처리에서 일반 계산으로
 
-1990년대의 PC graphics accelerator는 triangle setup, texture mapping과 rasterization처럼 정해진 rendering 단계를 빠르게 처리했습니다. 개발자는 그래픽 명령을 제출했지만 GPU에서 임의의 함수를 실행하지는 못했습니다. 2000년대 초에 vertex shader와 pixel shader가 programmable해지면서 상황이 바뀌었습니다. 동일한 작은 프로그램을 많은 vertex나 pixel에 적용하는 GPU는 data-parallel 계산 장치로도 사용할 수 있었습니다.
+그래픽 처리에는 같은 연산을 많은 데이터에 적용하는 작업이 포함됩니다. 예를 들어 정점 변환은 많은 정점에 행렬 연산을 적용하고, 픽셀 처리는 화면의 여러 위치에서 색을 계산합니다. 초기 그래픽 가속기는 이러한 작업의 상당 부분을 정해진 하드웨어 기능으로 제공했습니다.
 
-문제는 programming interface였습니다. OpenGL과 Direct3D는 graphics resource와 rendering pipeline을 표현하는 API입니다. 일반 계산용 array, pointer와 thread를 직접 노출하지 않았습니다. 개발자는 입력 배열을 texture에 저장하고, 계산을 fragment shader로 작성하고, 결과를 render target의 pixel로 받은 뒤 다시 읽었습니다. reduction이나 scatter처럼 graphics pipeline에 자연스럽지 않은 연산은 여러 pass와 우회 설계가 필요했습니다.
+프로그래밍 가능한 셰이더가 도입되면서 개발자는 그래픽 파이프라인의 일부 단계에서 실행할 프로그램을 작성할 수 있게 되었습니다. 정점이나 픽셀마다 다른 데이터를 사용하되 같은 프로그램을 적용하는 구조는 일반적인 배열 계산에도 사용할 수 있었습니다. GPU를 그래픽 이외의 계산에 사용하는 접근을 GPGPU라고 합니다.
 
-이 접근을 **GPGPU**, 즉 general-purpose computing on GPU라고 불렀습니다. GPGPU는 GPU의 잠재력을 증명했지만, 높은 진입 비용도 함께 드러냈습니다. NVIDIA가 2004년에 출판한 *GPU Gems*의 [서문](https://developer.nvidia.com/gpugems/gpugems/foreword)은 graphics accelerator가 programmable GPU로 변하던 시기와 개발자들이 반복해서 같은 기법을 발명하던 상황을 기록합니다.
+그러나 계산 가능한 하드웨어가 있다는 사실과 계산용 인터페이스가 있다는 사실은 다릅니다. 당시 그래픽스 API를 사용하려면 입력을 텍스처에 저장하고, 셰이더가 계산한 값을 렌더링 대상으로 출력하는 등의 변환이 필요했습니다. 일반 배열의 합을 계산하는 문제도 여러 렌더링 단계로 나누어 표현해야 할 수 있었습니다.
 
-Stanford의 Brook 연구도 중요한 중간 단계였습니다. Ian Buck 등이 개발한 Brook은 stream과 kernel 개념을 C 계열 언어로 표현하고 이를 GPU graphics API에 mapping했습니다. Brook은 개발자가 shader와 texture를 직접 조작하는 부담을 줄였지만, 아래에는 여전히 graphics pipeline이 있었습니다. NVIDIA는 2004년 Ian Buck을 영입했고, 이 연구 경험은 graphics API를 통하지 않는 CUDA programming model로 이어졌습니다. NVIDIA가 정리한 [accelerated computing의 역사](https://blogs.nvidia.com/blog/what-is-accelerated-computing/)는 Brook과 Buck의 합류를 CUDA 이전의 직접적인 배경으로 설명합니다. 이는 NVIDIA의 자사 회고 자료이므로, 사업 판단은 당시 공시 자료와 함께 읽어야 합니다.
+이 문제를 줄이기 위한 연구 중 하나가 Stanford의 BrookGPU입니다. Ian Buck과 공동 연구진이 SIGGRAPH 2004에서 발표한 [Brook for GPUs](https://graphics.stanford.edu/papers/brookgpu/)는 C에 데이터 병렬 구문을 추가하고, 컴파일러와 런타임이 그래픽 하드웨어 사용의 세부 사항을 처리하도록 했습니다. 개발자가 작성하는 언어와 하드웨어가 받아들이는 인터페이스 사이에 추상화 계층을 마련한 것입니다.
 
-## NVIDIA는 GPU 판매 시장 자체를 넓히려 했습니다
+BrookGPU는 CUDA와 동일한 시스템이 아닙니다. 다만 GPU의 계산 능력을 활용하려면 개발자에게 그래픽 파이프라인보다 적절한 프로그래밍 모델이 필요하다는 점을 보여 줍니다. CUDA는 하드웨어 제조사가 계산용 하드웨어 기능과 드라이버 인터페이스까지 함께 제공한다는 점에서 이 문제에 접근했습니다.
 
-2006년 NVIDIA의 주력 사업은 GeForce, Quadro와 chipset이었습니다. GPU 성능은 빠르게 증가했지만, graphics 수요만으로 사용할 수 있는 workload는 제한되어 있었습니다. 이미 출하된 GPU의 arithmetic throughput을 scientific computing, medical imaging, financial modeling과 oil-and-gas exploration에 사용할 수 있다면 NVIDIA는 CPU가 담당하던 고성능 계산 예산으로 진입할 수 있었습니다.
+## 컴퓨팅 시장을 위한 제품과 개발 환경
 
-이 전략은 나중의 해석이 아니라 당시 회사가 투자자에게 제시한 내용입니다. NVIDIA의 [2007 회계연도 Form 10-K](https://www.sec.gov/Archives/edgar/data/1045810/000104581007000008/fy2007annualreportonform10-k.htm)는 2006년 11월부터 CUDA-enabled GeForce 8을 업계에 제공했으며, GPU Computing이 이전에는 비용 때문에 어려웠던 계산 집약 문제를 처리하는 새로운 HPC 분야를 연다고 설명합니다. 같은 시기의 실적 발표는 fiscal 2008의 성장 동력으로 “GPU Computing era”를 명시했습니다.
+NVIDIA에는 GPU를 일반 계산에 사용하는 개발자가 늘어날수록 제품의 적용 시장이 넓어진다는 사업적 기회가 있었습니다. 과학 시뮬레이션, 금융 계산 및 공학 분석은 화면 출력보다 계산 처리량을 필요로 합니다. 이 시장에 진입하려면 그래픽 성능뿐 아니라 계산을 개발하고 배포할 수 있는 환경이 필요했습니다.
 
-사업 모델에는 두 층이 있었습니다.
+당시 회사가 공개한 자료에서도 이 방향을 확인할 수 있습니다. NVIDIA의 [2007 회계연도 연차보고서](https://www.sec.gov/Archives/edgar/data/1045810/000104581007000008/fy2007annualreportonform10-k.htm)는 CUDA를 지원하는 GeForce 8을 2006년 11월부터 업계에 제공했다고 설명합니다. 또한 엔지니어와 과학자가 PC의 GPU로 계산 집약적인 문제를 처리하는 GPU Computing을 새로운 적용 분야로 제시합니다. 이는 이후의 성공을 근거로 만든 설명이 아니라 당시 투자자에게 전달한 사업 방향입니다.
 
-| 층 | NVIDIA가 제공한 것 | 사업적 효과 |
-| --- | --- | --- |
-| 대중 GPU | CUDA가 동작하는 GeForce 설치 기반 | 개발자가 이미 보유한 장비에서 code를 시험하고 보급할 수 있음 |
-| 전문 계산 제품 | display output보다 계산에 초점을 맞춘 Tesla | 연구소·기업·HPC의 별도 예산과 system 시장에 진입 |
-| software platform | compiler, driver, libraries, tools | application이 GPU 세대가 바뀌어도 NVIDIA platform에 남을 이유를 만듦 |
+GeForce와 계산용 제품은 서로 다른 역할을 했습니다. 개발자는 일반 GPU에서 프로그램을 시험할 수 있었고, NVIDIA는 별도의 계산 시장을 대상으로 제품을 구성할 수 있었습니다. NVIDIA의 [SIGGRAPH 2007 소개 자료](https://www.nvidia.com/content/events/siggraph_2007/supercomputing.html)는 GeForce, Quadro 및 새 Tesla 제품군을 각각 게임, 전문 시각화 및 계산 작업과 연결합니다.
 
-2007년 6월 NVIDIA는 Tesla 브랜드를 발표했습니다. 당시 [NVIDIA의 GPU Computing 소개](https://www.nvidia.com/content/events/siggraph_2007/supercomputing.html)는 같은 compute engine을 GeForce의 game physics, Quadro의 professional visualization과 Tesla의 순수 계산에 걸쳐 사용한다는 제품 전략을 제시했습니다. CUDA compiler가 application source와 NVIDIA hardware 사이의 안정된 programming layer를 제공했기 때문에, Tesla는 단순히 video connector를 제거한 board보다 큰 의미를 가졌습니다. 하드웨어 판매와 developer ecosystem이 서로를 강화하는 구조가 시작된 것입니다.
+이 자료들에서 확인할 수 있는 것은 소프트웨어와 하드웨어를 함께 공급하려는 전략입니다. 그 결과 컴파일러와 라이브러리에 투자할수록 GPU에서 실행할 수 있는 애플리케이션이 늘고, 애플리케이션이 늘수록 GPU 제품의 적용 범위가 넓어지는 관계가 형성됩니다. 이러한 관계를 플랫폼 전략으로 해석할 수 있습니다. 다만 그 해석을 당시 모든 시장에서 성공이 보장되었다는 주장으로 확대해서는 안 됩니다.
 
-다만 “CUDA가 처음부터 오늘날의 지배력을 보장했다”고 거꾸로 해석하면 안 됩니다. 2007년에는 CUDA가 공개 beta와 1.0을 막 지난 vendor-specific platform이었습니다. HPC 개발자는 double precision, numerical correctness, cluster deployment, long-running workload와 tool maturity를 평가해야 했습니다. NVIDIA가 의도한 시장과 실제로 장기 성공한 시장은 구분해야 합니다.
+## G80에서 바뀐 실행 자원
 
-## G80은 graphics와 compute가 공유할 실행 기반을 만들었습니다
+소프트웨어만으로 이전 그래픽 하드웨어의 모든 제약을 제거할 수는 없습니다. CUDA의 초기 실행 모델은 G80 세대의 변화와 연결되어 있습니다.
 
-CUDA software만으로 이전 GPU의 제약을 제거할 수는 없었습니다. 2006년 11월 출시된 G80 기반 GeForce 8800은 DirectX 10을 지원하기 위해 **unified shader architecture**를 채택했습니다. 이전 세대에서는 vertex와 pixel processor 수가 고정되어 한 단계가 바쁜 동안 다른 단계의 arithmetic unit이 놀 수 있었습니다. G80은 동일한 scalar processor pool이 vertex, geometry, pixel과 compute thread를 실행하도록 만들었습니다.
+이전 GPU는 정점 처리와 픽셀 처리에 서로 다른 실행 자원을 배정했습니다. 한 종류의 작업이 많아져도 다른 종류에 할당된 자원을 그대로 사용할 수 없는 경우가 있었습니다. 통합 셰이더 아키텍처는 여러 셰이더 단계가 같은 종류의 프로그래밍 가능한 실행 자원을 사용할 수 있도록 합니다.
 
-NVIDIA의 [GTX 200 architecture technical brief](https://www.nvidia.com/docs/io/55506/geforce_gtx_200_gpu_technical_brief.pdf)는 GeForce 8800의 unified shader core가 작업 종류에 따라 동적으로 배정되며, 이 architecture가 CUDA compute의 기반이 되었다고 설명합니다. 이후 Fermi whitepaper의 G80 회고는 CUDA 관점에서 다음 변화를 강조합니다.
+2006년 11월 출시된 GeForce 8800은 이 구조를 사용했습니다. NVIDIA의 [GTX 200 기술 문서](https://www.nvidia.com/docs/io/55506/geforce_gtx_200_gpu_technical_brief.pdf)는 GeForce 8800의 통합 구조가 정점·픽셀·기하 작업에 자원을 동적으로 배정하며, CUDA 계산의 기반이 되었다고 설명합니다.
 
-- separate vertex/pixel pipeline을 하나의 programmable processor array로 통합했습니다.
-- scalar thread processor를 사용해 개발자가 vector register를 직접 packing하는 부담을 줄였습니다.
-- 여러 thread가 같은 instruction을 실행하는 SIMT execution model을 도입했습니다.
-- 같은 thread block이 값을 공유할 shared memory와 barrier synchronization을 제공했습니다.
-- hardware thread scheduler가 memory를 기다리는 warp 대신 실행 가능한 warp를 선택했습니다.
+통합 셰이더가 모든 그래픽 기능을 일반 연산 장치로 바꿨다는 뜻은 아닙니다. 래스터화와 같은 전용 기능은 여전히 필요합니다. 중요한 변화는 프로그래밍 가능한 계산 자원을 여러 작업에 사용할 수 있게 되었다는 점입니다. CUDA는 이 자원에 그래픽스 API와 별개의 계산 경로를 제공합니다.
 
-이 목록에서 “CUDA가 G80을 만들었다”거나 “G80이 graphics 기능을 없앴다”고 결론 내리면 안 됩니다. G80은 DirectX 10 graphics workload를 위해 unified shader가 필요했고, NVIDIA는 같은 programmable and threaded foundation을 CUDA compute에도 노출했습니다. graphics와 compute는 서로 다른 API를 사용하지만 동일한 GPU execution resources를 활용합니다.
+개발자는 물리적인 연산 장치 번호 대신 스레드와 스레드 블록을 지정합니다. 하드웨어는 블록을 실행 자원에 배치합니다. 따라서 프로그램이 표현하는 작업의 개수와 GPU가 동시에 처리할 수 있는 작업의 개수를 분리할 수 있습니다. 이 관계가 이후 GPU 세대에서도 유지되는 CUDA 실행 모델의 기반입니다.
 
-architecture의 trade-off도 분명했습니다. GPU는 많은 thread에 같은 종류의 계산을 적용하고 memory latency를 다른 thread의 실행으로 숨길 때 높은 throughput을 냅니다. 복잡한 control flow를 가진 소수 thread의 latency를 최소화하는 CPU와 목표가 다릅니다. CUDA는 GPU를 CPU처럼 보이게 감추지 않고, thread hierarchy와 memory hierarchy를 개발자에게 드러냈습니다. 이 노출은 성능을 제어할 수 있는 장점인 동시에 학습 부담이었습니다.
+## 초기 개발자가 확인한 가능성과 제약
 
-## 2007년의 CUDA는 “C처럼 보이는 병렬 machine interface”였습니다
+CUDA의 발표, 공개 베타 및 정식 도구 배포는 구분할 필요가 있습니다. 2006년의 하드웨어·플랫폼 공개에 이어 2007년에는 개발자가 사용할 수 있는 도구가 배포되었습니다. NVIDIA의 [CUDA 도구 보관소](https://developer.nvidia.com/cuda-toolkit-archive/)는 CUDA Toolkit 1.0을 2007년 6월 릴리스로 기록합니다. 초기 CUDA는 C 기반 개발 환경으로 소개되었으며, 오늘날의 CUDA C++ 지원 전체가 첫 버전에 있었던 것은 아닙니다.
 
-NVIDIA는 2007년 2월 CUDA SDK와 C compiler의 public beta를 공개했고, 6월에 CUDA Toolkit 1.0을 배포했습니다. [NVIDIA Toolkit archive](https://developer.nvidia.com/cuda-toolkit-archive/)에서 1.0의 시점을 확인할 수 있습니다. 당시 발표가 “C compiler”를 전면에 내세운 이유는 graphics shader 언어보다 훨씬 넓은 developer base에 접근하기 위해서였습니다.
+초기 반응은 당시 사용자가 직접 수행한 연구에서 확인할 수 있습니다. Robert Belleman, Jeroen Bedorf 및 Simon Portegies Zwart는 2007년 7월 공개한 [중력 N체 시뮬레이션 연구](https://arxiv.org/abs/0707.0438)에서 GeForce 8800 GTX로 힘 계산을 수행했습니다. 시간 적분은 CPU에 두고 계산량이 많은 부분을 GPU로 옮겼습니다. 연구진은 문제 크기와 정확도 조건에 따라 비교 결과가 달라짐을 함께 보고했습니다.
 
-초기 CUDA source는 다음 구조를 사용했습니다. 현재 표기에서는 CUDA C++이지만, 핵심 확장은 초기 모델과 같습니다.
+이 사례는 두 가지를 보여 줍니다. 첫째, 초기 사용자는 CUDA를 프로그램 전체를 GPU로 바꾸는 도구가 아니라 계산 집약적인 부분을 분리하는 수단으로 사용했습니다. 둘째, 처리 속도만으로 도입 여부를 결정하지 않았습니다. 수치 정밀도와 기존 계산 결과를 함께 검토했습니다.
 
-```cpp
-__global__ void fill_pattern(unsigned int* output, unsigned int count)
-{
-    unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
+Shuai Che와 공동 연구진의 2008년 [CUDA 성능 연구](https://www.cs.virginia.edu/~skadron/Papers/cuda_jpdc08.pdf)는 여러 애플리케이션을 구현하면서 메모리 계층과 블록 간 동기화 제약에 맞춘 알고리즘 변경을 설명합니다. 이 자료는 C와 유사한 구문이 개발을 가능하게 하더라도, 좋은 성능을 얻는 과정에는 별도의 병렬 설계가 필요했음을 보여 줍니다.
 
-    if (index < count) {
-        output[index] = 3 * index + 7;
-    }
-}
+이러한 연구를 개발자 전체의 여론으로 볼 수는 없습니다. 다만 공개 직후 실제로 도입한 사용자들이 무엇을 평가했는지는 확인할 수 있습니다. 그래픽스 API 없이 계산을 작성할 수 있다는 접근성과, 알고리즘·메모리·정밀도를 다시 검토해야 한다는 비용이 함께 존재했습니다.
 
-int main()
-{
-    unsigned int* device_output = nullptr;
-    cudaMalloc(&device_output, 257 * sizeof(unsigned int));
+## 계산 수요와 아키텍처의 변화
 
-    fill_pattern<<<3, 128>>>(device_output, 257);
-    cudaDeviceSynchronize();
+CUDA 이후의 GPU는 같은 실행 모델을 유지하면서도 계산에 필요한 기능을 확장했습니다. 이 변화는 세대 이름을 외우기보다 어떤 제약을 줄였는지 살펴보면 이해하기 쉽습니다.
 
-    cudaFree(device_output);
-}
-```
+NVIDIA의 [Fermi 아키텍처 백서](https://www.nvidia.com/content/pdf/fermi_white_papers/nvidiafermicomputearchitecturewhitepaper.pdf)는 배정밀도 연산, 캐시 계층 및 ECC 메모리 지원을 계산 시스템의 주요 기능으로 설명합니다. ECC는 메모리 오류를 검출하거나 수정하기 위한 기능입니다. 이러한 요구는 많은 산술 연산을 빠르게 처리하는 것뿐 아니라 장시간 계산의 신뢰성과 더 다양한 데이터 접근을 고려하게 합니다. 기능 제공 여부는 실제 제품 구성에 따라 다릅니다.
 
-`__global__`은 CPU가 호출하고 GPU가 실행하는 kernel entry point를 지정합니다. `blockIdx`, `blockDim`과 `threadIdx`는 각 GPU thread가 자신의 logical index를 계산하도록 제공합니다. `<<<3, 128>>>`은 block 3개와 block당 thread 128개를 launch합니다. `cudaMalloc`과 `cudaFree`는 별도의 device memory를 관리합니다.
+이후 [Volta V100 백서](https://images.nvidia.com/content/volta-architecture/pdf/volta-architecture-whitepaper.pdf)는 행렬 연산을 위한 Tensor Core와 독립 스레드 스케줄링을 설명합니다. 전자는 특정 연산을 전용 장치로 처리하는 변화이고, 후자는 스레드 진행 상태를 관리하는 변화입니다. CUDA 프로그램의 구문이 같더라도 활용할 수 있는 기능과 동기화 시 주의할 조건은 달라질 수 있습니다.
 
-이 source가 일반 C++ compiler에서 그대로 compile되지 않는다는 점이 중요합니다. CUDA는 C++의 library만 추가한 것이 아닙니다. NVIDIA compiler driver인 `nvcc`가 execution-space annotation과 kernel launch syntax를 해석하고, host code와 device code를 분리해 서로 다른 compiler path로 보냅니다. 다음 편에서는 이 compilation pipeline을 PTX와 driver까지 따라갑니다.
+PTX는 이러한 변화 사이에서 컴파일러와 GPU를 연결합니다. 프로그램은 가상 명령어로 표현할 수 있고, 도구 또는 드라이버는 지원되는 GPU에 맞는 실제 명령어를 생성합니다. 이 구조가 모든 구형·신형 조합의 호환성을 보장하는 것은 아닙니다. PTX 버전, 대상 기능 및 드라이버 지원 조건이 함께 맞아야 합니다.
 
-## 개발자는 접근성에 환영했고, 성능 모델에는 경계했습니다
+다음 문서에서는 이 관계를 작은 CUDA C++ 프로그램으로 확인합니다. CPU의 진입점에서 시작하여 메모리 할당, 커널 제출, 결과 복사 및 컴파일 산출물을 차례로 살펴봅니다.
 
-초기 반응을 “C를 쓸 수 있어서 모두 쉽게 GPU를 사용했다”로 요약하면 실제 경험을 놓칩니다. CUDA는 source 표현을 크게 개선했지만, sequential C program을 자동으로 parallel program으로 바꾸지는 않았습니다.
+## 다음 단계
 
-긍정적인 변화는 구체적이었습니다.
-
-- OpenGL이나 Direct3D context를 만들지 않고 계산을 제출할 수 있었습니다.
-- texture와 pixel이 아니라 pointer, index와 array라는 계산 용어를 사용할 수 있었습니다.
-- thread block, shared memory와 synchronization을 직접 표현할 수 있었습니다.
-- GeForce 8의 대규모 설치 기반에서 같은 model을 시험할 수 있었습니다.
-
-반면 새로 떠안은 책임도 구체적이었습니다.
-
-- algorithm을 많은 독립 thread로 분해해야 했습니다.
-- host와 device의 별도 memory 사이에서 data를 이동해야 했습니다.
-- warp divergence와 memory coalescing처럼 CPU C에는 없던 성능 조건을 이해해야 했습니다.
-- G80에는 hardware double precision이 없었고, 장시간 kernel과 debugging tool에도 초기 제약이 있었습니다.
-- CUDA source와 binary ecosystem은 NVIDIA hardware에 종속되었습니다.
-
-2008년 *ACM Queue*에 실린 John Nickolls, Ian Buck, Michael Garland와 Kevin Skadron의 [Scalable Parallel Programming with CUDA](https://doi.org/10.1145/1365490.1365500)는 CUDA를 core 수가 달라져도 확장되는 parallel programming model로 제시했습니다. 저자 셋이 NVIDIA 소속이므로 이 논문은 platform 설계자의 설명으로 읽어야 합니다. 같은 시기의 독립적인 [Tom's Hardware 평가](https://www.tomshardware.com/reviews/nvidia-cuda-gpu%2C1954-14.html)는 C 개발자가 실제로 사용할 수 있는 수준에 도달했다고 보면서도, 설득력 있는 성능을 얻으려면 architecture에 맞는 사고와 노력이 필요하다고 평가했습니다.
-
-초기 scientific application은 가능성을 빠르게 시험했습니다. 2007년 7월 공개된 gravitational N-body simulation 연구처럼 CUDA 공개 직후부터 기존 GPGPU algorithm을 CUDA로 옮긴 사례가 등장했습니다. 이런 사례는 개발자들이 CUDA를 단순 graphics effect가 아니라 HPC programming interface로 받아들이기 시작했다는 증거입니다. 다만 논문의 speedup은 특정 algorithm과 비교 조건의 결과이며, 모든 program이 GPU에서 빨라진다는 뜻은 아닙니다.
-
-## CUDA의 장기 경쟁력은 compiler 아래의 층까지 이어졌습니다
-
-CUDA C++ syntax만 복제하면 CUDA platform 전체를 대체할 수 없습니다. application이 실제 제품이 되려면 compiler, virtual ISA, driver compatibility, optimized library, debugger, profiler와 framework integration이 함께 필요합니다. NVIDIA는 이 층을 GPU 세대와 함께 지속적으로 발전시켰습니다.
-
-```text
-application / framework
-        ↓
-CUDA libraries and CUDA C++ source
-        ↓
-compiler toolchain and PTX
-        ↓
-CUDA runtime / driver
-        ↓
-NVIDIA GPU architecture
-```
-
-아래로 갈수록 hardware와 가까워지고, 위로 갈수록 application developer가 사용하는 재사용 자산이 많아집니다. CUDA가 NVIDIA의 사업적 방어력이 된 이유는 단일 compiler syntax 때문이 아니라, application과 library가 이 여러 층의 behavior, performance와 tooling에 의존하기 때문입니다.
-
-다음 편에서는 위 그림을 실제 compilation 순서로 펼칩니다. CUDA C++ source에서 `nvcc`가 무엇을 분리하고, PTX가 무엇을 보존하며, driver가 어느 시점에 GPU machine code를 준비하는지 설명한 뒤 `threadIdx`가 실제 출력 원소를 선택하는 과정으로 연결합니다.
-
-이전: [시리즈 안내](/posts/cuda-출근길-시리즈/). 다음: [02 - kernel과 thread index](/posts/cuda-출근길-02-kernel과-thread-index/).
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전: 시리즈 안내](/posts/cuda-출근길-시리즈/) · [다음 문서](/posts/cuda-출근길-02-kernel과-thread-index/)

@@ -1,35 +1,97 @@
 ---
 title: "CUDA 출근길 10 — shared memory와 barrier"
-description: "block 안에서 데이터를 재사용할 때 저장과 barrier가 해결하는 문제를 설명합니다."
+description: "부분 합 예제로 공유 메모리 초기화와 블록 배리어의 역할을 설명합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:10:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "rust", "gpu", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
+공유 메모리는 같은 블록의 스레드가 데이터를 교환할 수 있는 저장 공간입니다. 한 스레드가 기록한 값을 다른 스레드가 읽는 계산에서는 저장 공간뿐 아니라 실행 순서도 필요합니다. 블록 범위의 배리어는 이 순서를 표현합니다.
 
-global memory의 같은 입력을 block의 여러 thread가 반복해서 읽는다면, 일부 값을 shared memory에 가져와 재사용할 수 있습니다. shared memory는 block마다 별도로 존재하며 그 block의 thread만 접근합니다.
+이 문서에서는 배열 일부의 합을 계산하는 예제를 사용합니다. 각 스레드가 입력 하나를 읽은 뒤 공유 메모리에 저장하고, 스레드 0이 그 값을 합산합니다. 이 방식은 최적화된 합산 알고리즘이 아니라 데이터 교환과 동기화의 역할을 보여 주는 기본 예제입니다.
 
-개념적인 tile 흐름은 다음과 같습니다.
+## 스레드별 입력을 공유 배열에 저장
 
-```text
-각 thread가 global input 일부를 shared tile에 기록
-                    ↓
-          block 범위 barrier
-                    ↓
-각 thread가 shared tile을 읽어 자신의 누적합 계산
+다음 커널은 반드시 블록당 스레드 128개로 실행합니다. 공유 배열 크기와 블록 크기를 같게 정한 예제의 계약입니다.
+
+```cpp
+__global__ void BlockSum(
+    const float* input,
+    float* partial,
+    unsigned int count)
+{
+    __shared__ float values[128];
+
+    unsigned int local = threadIdx.x;
+    unsigned int index = blockIdx.x * 128 + local;
+
+    values[local] = index < count ? input[index] : 0.0f;
+
+    __syncthreads();
+
+    if (local == 0)
+    {
+        float sum = 0.0f;
+
+        for (unsigned int i = 0; i < 128; ++i)
+        {
+            sum += values[i];
+        }
+
+        partial[blockIdx.x] = sum;
+    }
+}
 ```
 
-barrier가 필요한 이유는 thread별 실행 속도가 같다고 보장할 수 없기 때문입니다. 어떤 thread가 tile 기록을 끝내기 전에 다른 thread가 그 위치를 읽으면 아직 준비되지 않은 값을 사용할 수 있습니다. block barrier는 모든 참여 thread가 해당 지점에 도착한 뒤 다음 단계로 진행하게 합니다.
+각 스레드는 자신의 `local` 위치에 기록합니다. 입력의 유효 범위에 있으면 입력값을 저장하고, 범위 밖이면 0을 저장합니다. 덧셈에서 0은 결과를 바꾸지 않으므로 마지막 블록의 빈 위치를 같은 합산 코드로 처리할 수 있습니다.
 
-NVIDIA Programming Guide는 `__syncthreads()`가 같은 block의 thread만 동기화한다고 명시합니다. 다른 frontend가 PTX barrier instruction을 생성하더라도 동기화 범위는 같습니다. [CUDA kernel의 shared memory와 동기화](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/intro-to-cuda-cpp.html)
+예를 들어 입력이 `[1, 2, 3]`이면 공유 배열의 처음 세 위치에 1, 2, 3을 저장하고 나머지 위치에 0을 저장합니다. 스레드 0은 합계 6을 출력합니다.
 
-조건문 안에서 일부 thread만 barrier에 도착하도록 만들면 교착이나 정의되지 않은 동작으로 이어질 수 있습니다. 경계 밖 thread도 협력 단계의 barrier에는 참여하고, 실제 global load나 계산만 조건으로 막는 형태가 필요할 수 있습니다.
+## 배리어가 필요한 이유
 
-shared memory가 항상 빠르게 만드는 것도 아닙니다. global load의 중복을 줄일 수 있지만 tile을 복사하는 명령, barrier, shared memory 사용량이 추가됩니다. 같은 bank를 여러 thread가 충돌하는 방식으로 접근하면 요청이 직렬화될 수 있습니다. NVIDIA Best Practices Guide는 shared memory가 재사용과 coalescing을 돕는 경우와 bank conflict를 함께 설명하고 있습니다. [Shared Memory and Memory Banks](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory)
+`__syncthreads()` 이전에는 각 스레드가 자신의 입력을 준비합니다. 그 이후 스레드 0은 다른 스레드들이 기록한 위치도 읽습니다.
 
-첫 linear kernel은 shared memory 없이 정확성을 검증합니다. 그 결과와 접근 패턴을 측정한 뒤 tile을 추가해야 최적화의 효과와 비용을 비교할 수 있습니다.
+배리어가 없으면 스레드 0이 다른 워프의 기록보다 먼저 합산을 시작할 수 있습니다. 공유 메모리라는 이름은 다른 스레드의 접근을 허용한다는 뜻이지 기록 완료를 자동으로 기다린다는 뜻이 아닙니다.
 
-이전: [09 - coalescing](/posts/cuda-출근길-09-coalescing/). 다음: [11 - linear kernel로 확장](/posts/cuda-출근길-11-linear-kernel로-확장/).
+배리어는 블록의 참여 스레드가 해당 지점에 도착하도록 맞추고, 배리어 이전의 관련 메모리 접근을 이후의 읽기에서 사용할 수 있도록 합니다. 이 예제에서는 모든 스레드가 조건 없이 같은 배리어를 실행합니다.
+
+NVIDIA의 [동기화 함수 설명](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-c-programming-guide/index.html#synchronization-functions)은 `__syncthreads`의 블록 범위와 메모리 가시성 규칙을 정의합니다.
+
+## 경계 스레드도 같은 단계에 참여
+
+이 예제에서는 범위 밖 스레드를 배리어 전에 반환시키지 않습니다. 대신 0을 기록하고 동일한 동기화 단계에 참여하도록 구성했습니다.
+
+이 선택은 마지막 블록에서도 `values`의 모든 위치가 초기화되도록 합니다. 일부 스레드가 배열 위치를 초기화하지 않은 채 빠져나가면 스레드 0이 쓰이지 않은 값을 읽을 수 있습니다. 배리어가 있다고 해서 초기화하지 않은 메모리에 올바른 값이 생기는 것은 아닙니다.
+
+일반적으로 블록 배리어가 있는 코드를 조건부로 실행할 때에는 참여 규칙을 주의해서 검토해야 합니다. 같은 협력 단계에 필요한 스레드들이 서로 다른 경로에서 기다리는 구조를 만들지 않도록 해야 합니다.
+
+## 블록의 결과를 다음 단계로 전달
+
+입력이 257개이면 블록은 세 개입니다. 각 블록은 자신의 부분 합을 `partial[blockIdx.x]`에 기록합니다. 따라서 출력 배열에는 원소 세 개가 필요합니다.
+
+입력이 모두 1이면 부분 합은 다음과 같습니다.
+
+```text
+블록 0: 128
+블록 1: 128
+블록 2:   1
+```
+
+블록 배리어는 다른 블록을 기다리지 않습니다. 전체 합 257이 필요하면 이 세 결과를 다음 커널이나 호스트에서 합산해야 합니다. 다음 커널을 같은 스트림에 제출하면 첫 커널의 완료와 후속 계산 사이의 순서를 표현할 수 있습니다.
+
+일반 커널 안에서 블록들이 모두 동시에 실행된다고 가정하고 서로를 기다리는 방식은 피해야 합니다. 아직 배치되지 않은 블록이 필요한 경우 진행이 막힐 수 있습니다.
+
+## 공유 메모리의 비용
+
+공유 메모리에 복사하면 기록 명령과 배리어가 추가됩니다. 이 예제는 스레드 0이 합산을 직렬로 수행하므로 많은 스레드를 계산에 활용하지도 않습니다. 공유 메모리를 사용했다는 사실만으로 빠른 구현이 된 것은 아닙니다.
+
+성능을 개선하려면 여러 스레드가 단계적으로 부분 합을 결합하는 방식 등을 검토할 수 있습니다. 그때에는 연산 순서, 동기화 횟수 및 공유 메모리 접근 충돌을 함께 확인합니다. 현재 예제는 그러한 변경의 정확성을 비교할 수 있는 단순한 출발점입니다.
+
+다음 문서에서는 입력값과 가중치의 곱을 누적하여 선형 계층의 출력을 계산합니다.
+
+## 다음 단계
+
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서](/posts/cuda-출근길-09-coalescing/) · [다음 문서](/posts/cuda-출근길-11-linear-kernel로-확장/)

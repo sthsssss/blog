@@ -1,54 +1,123 @@
 ---
 title: "CUDA 출근길 11 — linear kernel로 확장"
-description: "probe의 thread-to-output 매핑을 MLP linear 연산으로 확장하고 shape와 weight 배치를 읽습니다."
+description: "행 우선 가중치의 작업 분배와 CPU·GPU 부동소수점 결과 검증을 설명합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:11:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA 출근길: CUDA C++에서 PTX와 GPU architecture를 거쳐 linear kernel까지"
-tags: ["cuda", "rust", "gpu", "cuda-commute"]
+  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+tags: ["cuda", "cpp", "gpu", "cuda-commute"]
 ---
 
+신경망의 선형 계층은 입력 벡터에 가중치를 적용하고 편향을 더합니다. CUDA로 이 연산을 구현하려면 먼저 배열 배치와 각 스레드의 담당 출력을 정해야 합니다. 같은 수식을 사용해도 데이터 배치나 인덱스 해석이 다르면 다른 결과를 계산합니다.
 
-probe는 thread 하나가 출력 원소 하나를 만들었습니다. MLP의 단일 입력 벡터에 대한 linear 연산도 같은 출발점을 사용할 수 있습니다.
+이 문서에서는 입력 벡터 하나를 처리합니다. 출력 하나를 스레드 하나에 배정하여 결과를 직접 추적할 수 있는 기준 구현을 작성합니다. 이 구현은 행렬 라이브러리의 최적화된 구현을 대체하기 위한 것이 아닙니다.
+
+## 입력과 가중치의 배치
+
+입력 수를 `inputCount`, 출력 수를 `outputCount`라고 합니다. 가중치는 출력마다 한 행을 갖는 행 우선 배열입니다.
+
+```text
+input:   inputCount개
+weights: outputCount × inputCount개
+bias:    outputCount개
+output:  outputCount개
+```
+
+출력 `o`는 다음 식으로 계산합니다.
 
 ```text
 output[o] = bias[o]
-          + Σ weights[o * inputs + i] × input[i]
+          + Σ weights[o * inputCount + i] * input[i]
 ```
 
-가장 단순한 GPU kernel은 전역 thread 인덱스를 출력 번호 `o`로 사용합니다. `o < outputs`인 thread만 실행하고, 그 thread가 모든 입력 `i`를 순회하며 하나의 누적합을 계산합니다.
+수학적으로는 열벡터 표현에서 `y = Wx + b`입니다. 입력을 행벡터로 표현하면 전치 관계를 고려해야 합니다. 코드의 실제 저장 순서는 위의 주소 식으로 정합니다.
+
+편향이 포함된 이 연산은 엄밀하게는 아핀 변환입니다. 신경망 API에서 흔히 Linear 또는 Dense라고 부르는 계층을 여기서는 선형 계층으로 지칭합니다.
+
+## 출력 하나를 스레드 하나에 배정
+
+다음 커널은 한 스레드가 가중치의 한 행을 순회합니다.
 
 ```cpp
-unsigned int o = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void Linear(
+    const float* input,
+    const float* weights,
+    const float* bias,
+    float* output,
+    unsigned int inputCount,
+    unsigned int outputCount)
+{
+    unsigned int o =
+        blockIdx.x * blockDim.x + threadIdx.x;
 
-if (o < outputs) {
-    float sum = bias[o];
-
-    for (unsigned int i = 0; i < inputs; ++i) {
-        sum += weights[o * inputs + i] * input[i];
+    if (o >= outputCount)
+    {
+        return;
     }
 
-    logits[o] = sum;
+    float sum = bias[o];
+
+    for (unsigned int i = 0; i < inputCount; ++i)
+    {
+        sum += weights[o * inputCount + i] * input[i];
+    }
+
+    output[o] = sum;
 }
 ```
 
-이 코드는 계산 규칙을 CPU 구현과 직접 비교하기 쉽습니다. thread 사이의 합산이나 barrier가 없고, 각 thread가 서로 다른 `logits[o]`를 쓰므로 출력 write race도 없습니다.
+출력 수를 기준으로 그리드 크기를 계산합니다. 입력 수는 각 스레드가 수행할 반복 횟수입니다. 두 차원을 바꾸어 사용하면 실행할 스레드 수나 가중치 주소가 잘못됩니다.
 
-그러나 정확성 조건은 여전히 host와 kernel이 함께 지켜야 합니다.
+이 커널에는 블록 배리어가 없습니다. 각 스레드가 자신의 합계를 계산하고 서로 다른 출력에 기록하기 때문입니다. 입력과 가중치는 읽기 전용이며, 출력 메모리가 이 입력 영역과 충돌하지 않는다는 조건을 사용합니다.
 
-- `input.len() == inputs`
-- `weights.len() == inputs * outputs`
-- `bias.len() == outputs`
-- `logits.len() == outputs`
-- weight는 CPU 기준과 같은 row-major 배치를 사용합니다.
+## 작은 입력으로 결과 확인
 
-GPU 결과 검증은 argmax 하나로 끝내지 않습니다. 첫 linear 출력, ReLU 출력, 두 번째 linear의 logits를 CPU 또는 저장된 기준값과 각각 비교합니다. 서로 다른 logits가 우연히 같은 예측 숫자를 만들 수 있기 때문입니다.
+입력이 `[2, 3]`, 가중치의 두 행이 `[1, 2]`, `[-1, 1]`, 편향이 `[0.5, -0.5]`라고 가정합니다.
 
-FP32 덧셈은 결합법칙을 보장하지 않습니다. 첫 kernel이 CPU와 같은 순서로 한 thread에서 누적하면 비교가 단순합니다. 이후 여러 thread가 하나의 출력 합을 병렬 reduction하면 합산 순서가 달라져 작은 수치 차이가 생길 수 있습니다. 성능 개선과 허용 오차 변경을 한 단계에서 섞지 않습니다.
+첫 번째 스레드는 다음 값을 계산합니다.
 
-이 kernel은 GPU를 충분히 활용하지 못할 수 있습니다. 출력이 128개나 10개뿐이면 활성 thread가 적고, 각 thread가 긴 직렬 loop를 실행합니다. 그래도 **작고 검증 가능한 기준 kernel**이라는 역할이 있습니다. 다음 최적화는 이 결과를 보존하면서 입력 차원의 병렬화, weight 배치, shared memory를 하나씩 비교해야 합니다.
+```text
+0.5 + 1 × 2 + 2 × 3 = 8.5
+```
 
-다음 편에서는 모델과 작업 buffer를 매번 다시 만들지 않고 재사용하며, 초기화·전송·kernel·전체 지연을 구분해 측정합니다.
+두 번째 스레드는 다음 값을 계산합니다.
 
-이전: [10 - shared memory와 barrier](/posts/cuda-출근길-10-shared-memory와-barrier/). 다음: [12 - 자원 재사용과 측정](/posts/cuda-출근길-12-자원-재사용과-측정/).
+```text
+-0.5 + (-1) × 2 + 1 × 3 = 0.5
+```
+
+따라서 출력은 `[8.5, 0.5]`입니다. 전체 예제는 이 값을 실제 GPU 출력과 비교합니다. 가중치와 편향이 모두 0인 입력만으로 검사하면 인덱스 오류가 드러나지 않을 수 있으므로, 부호와 위치에 따라 결과가 달라지는 데이터를 사용합니다.
+
+실제 애플리케이션에서는 커널 제출 전에 각 배열 길이를 확인해야 합니다. 가중치 원소 수를 계산하는 곱셈의 오버플로도 검사 대상입니다. 작은 예제의 상수 크기가 일반 입력 검증을 대신하지는 않습니다.
+
+## 부동소수점 결과 비교
+
+일반적인 실수 입력에서는 CPU와 GPU의 결과가 비트 단위로 같지 않을 수 있습니다. FP32 연산에는 반올림이 있으며 합산 순서를 바꾸면 결과가 달라질 수 있습니다. GPU 컴파일러가 곱셈과 덧셈을 FMA로 결합하는 경우에도 각각 반올림하는 계산과 차이가 생길 수 있습니다.
+
+따라서 동일한 수식을 사용했다는 이유로 모든 차이를 버그라고 판단하거나, 작은 차이라는 이유로 모두 허용해서는 안 됩니다. 입력 범위와 계산 길이에 맞는 기준을 정해야 합니다.
+
+한 가지 비교 형태는 다음과 같습니다.
+
+```text
+|actual - expected| <= absoluteTolerance
+                     + relativeTolerance × max(|actual|, |expected|)
+```
+
+절대 허용 오차는 0에 가까운 결과를 비교하는 데 필요하고, 상대 허용 오차는 값의 크기를 반영합니다. NaN이나 무한대는 이러한 수치 비교 전에 별도로 확인합니다.
+
+NVIDIA의 [부동소수점 설명](https://docs.nvidia.com/cuda/floating-point/index.html)은 연산 순서, FMA 및 CPU·GPU 비교에서 고려할 조건을 설명합니다. 허용 오차는 문서의 예제 상수를 모든 모델에 적용하기보다 실제 수치 요구 사항에 따라 결정해야 합니다.
+
+## 다음 계층으로 결과 전달
+
+선형 계층 뒤에 ReLU를 적용하고 또 다른 선형 계층을 실행할 수 있습니다. 세 커널을 같은 스트림에 제출하면 중간 결과를 장치 메모리에 유지한 채 순서대로 사용할 수 있습니다.
+
+검증할 때에는 최종 예측 번호만 비교하지 마세요. 서로 다른 출력 벡터가 우연히 같은 최댓값 위치를 가질 수 있습니다. 첫 선형 출력, 활성화 결과 및 마지막 출력 벡터를 각각 비교하면 어느 단계에서 차이가 생겼는지 구분할 수 있습니다.
+
+이 기준 커널은 출력 수가 작으면 병렬성이 부족할 수 있습니다. 또한 인접 스레드의 가중치 접근 간격이 클 수 있습니다. 이후 최적화에서는 입력 차원을 여러 스레드에 분배하거나 라이브러리 구현과 비교할 수 있습니다. 먼저 같은 결과를 재현하는 기준을 보존해야 변경의 효과를 판단할 수 있습니다.
+
+다음 문서에서는 이러한 연산을 반복할 때 자원을 재사용하고 시간을 측정하는 방법을 설명합니다.
+
+## 다음 단계
+
+[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서](/posts/cuda-출근길-10-shared-memory와-barrier/) · [다음 문서](/posts/cuda-출근길-12-자원-재사용과-측정/)
