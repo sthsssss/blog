@@ -75,6 +75,15 @@ public:
     Event& operator=(const Event&) = delete;
 };
 
+__global__ void Add(const float* a, const float* b, float* c, unsigned int count)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < count)
+    {
+        c[i] = a[i] + b[i];
+    }
+}
+
 __global__ void FillPattern(unsigned int* output, unsigned int count)
 {
     unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -161,6 +170,34 @@ void LaunchPattern(unsigned int* output, unsigned int count)
 void Require(bool condition)
 {
     if (!condition) throw std::runtime_error("Output mismatch");
+}
+
+void VerifyAdd()
+{
+    for (unsigned int count : {0u, 1u, 127u, 128u, 129u, 257u, 1048576u})
+    {
+        if (count == 0) continue; // Empty input submits no GPU work.
+        const size_t bytes = count * sizeof(float);
+        HostBuffer<float> a(count), b(count), c(count);
+        DeviceBuffer<float> da(count), db(count), dc(count);
+        Stream stream; // Destroy before buffers, including exceptional exits.
+
+        for (unsigned int i = 0; i < count; ++i)
+        {
+            a.data[i] = static_cast<float>(i % 128);
+            b.data[i] = -static_cast<float>(i % 17);
+        }
+        Check(cudaMemcpyAsync(da.data, a.data, bytes, cudaMemcpyHostToDevice, stream.value));
+        Check(cudaMemcpyAsync(db.data, b.data, bytes, cudaMemcpyHostToDevice, stream.value));
+        Add<<<GridSize(count), 128, 0, stream.value>>>(da.data, db.data, dc.data, count);
+        Check(cudaGetLastError());
+        Check(cudaMemcpyAsync(c.data, dc.data, bytes, cudaMemcpyDeviceToHost, stream.value));
+        Check(cudaStreamSynchronize(stream.value));
+
+        for (unsigned int i = 0; i < count; ++i)
+            Require(c.data[i] == a.data[i] + b.data[i]);
+    }
+    std::cout << "PASS add: 0, 1, 127, 128, 129, 257, 1048576\n";
 }
 
 void VerifyPattern()
@@ -292,6 +329,7 @@ int main()
     try
     {
         Check(cudaSetDevice(0));
+        VerifyAdd();
         VerifyPattern();
         VerifyStream();
         VerifyBlockSum();

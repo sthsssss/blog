@@ -12,7 +12,7 @@ export async function GET(context) {
     '/tags/',
   ];
 
-  const postUrls = posts.map((p) => `/posts/${slugify(p.data.title)}/`);
+  const postUrls = posts.map((p) => `/posts/${p.data.slug ?? slugify(p.data.title)}/`);
 
   const uniqueTags = [...new Set(posts.map((p) => p.data.tags).flat())];
   const tagUrls = uniqueTags.map((t) => `/tags/${slugify(t)}/`);

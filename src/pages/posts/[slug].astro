@@ -6,7 +6,7 @@ import slugify from '../../utils/slugify';
 export async function getStaticPaths() {
   const posts = await getCollection('blog');
   return posts.map((post) => ({
-    params: { slug: slugify(post.data.title) },
+    params: { slug: post.data.slug ?? slugify(post.data.title) },
     props: { post },
   }));
 }

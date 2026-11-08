@@ -10,6 +10,7 @@ const blog = defineCollection({
     loader: glob({ pattern: '**/[^_]*.md', base: "./src/blog" }),
     schema: z.object({
       title: z.string(),
+      slug: z.string().regex(/^[a-z0-9가-힣]+(?:-[a-z0-9가-힣]+)*$/).optional(),
       pubDate: z.date(),
       description: z.string(),
       author: z.string(),

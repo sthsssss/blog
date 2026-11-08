@@ -1,59 +1,53 @@
 ---
-title: "CUDA 출근길 부록 — 검증 기록"
-description: "CUDA C++ 전체 예제의 빌드 방법, 실제 GPU 실행 결과 및 검증 범위를 설명합니다."
+title: "CUDA 출근길 부록 — 실행 검증과 참고 자료"
+slug: "cuda-출근길-부록-검증-기록"
+description: "배열 덧셈의 GPU 실행, PTX·cubin·fatbinary 검증과 실제 확인 범위를 기록하고 한국어 설명 자료와 기술 근거를 구분합니다."
 author: "Tae Shim"
 pubDate: 2026-11-04T08:13:00+09:00
 image:
   url: "/images/cuda-commute-series.svg"
-  alt: "CUDA의 배경, 실행 모델 및 애플리케이션 구성"
+  alt: "프로그램의 표현, CUDA 소프트웨어, GPU 하드웨어의 관계"
 tags: ["cuda", "cpp", "gpu", "cuda-commute", "verification"]
 ---
 
-이 문서는 시리즈의 코드 예제를 빌드하고 실행하는 방법을 설명합니다. 전체 소스는 [examples.cu](/downloads/cuda-commute/examples.cu)에서 내려받을 수 있습니다. 소스에는 커널, 호스트 측 자원 관리, CUDA 오류 처리 및 결과 비교가 포함되어 있습니다.
+이 부록은 문서의 예제를 재현하는 방법과 실제로 확인한 범위를 기록합니다. 전체 프로그램은 [examples.cu](/downloads/cuda-commute/examples.cu)에서 내려받을 수 있습니다. 설명을 위해 일부만 보여 준 본문 코드와 달리, 전체 파일에는 헤더·오류 처리·자원 정리·결과 비교와 CPU의 진입점이 포함되어 있습니다.
 
-## 예제의 구성
+## 실행 진입점과 검증 대상
 
-프로그램은 CPU의 `main`에서 시작합니다. 장치 0을 선택한 뒤 다음 검사를 순서대로 수행합니다.
+`main`은 장치 0을 선택하고 검증 함수를 순서대로 호출합니다. 배열 덧셈 검사는 pinned 호스트 버퍼와 장치 버퍼를 만들고, 명시적 스트림에서 입력 복사·커널·결과 복사를 실행한 뒤 CPU에서 기대값과 비교합니다.
 
-| 검사 | 입력 또는 실행 조건 | 확인하는 결과 |
+| 검사 | 입력과 조건 | 확인한 내용 |
 | --- | --- | --- |
-| 패턴 기록 | 원소 0, 1, 127, 128, 129, 257개 | 모든 유효 원소가 `3 * index + 7`과 일치 |
-| 스트림 처리 | 양수·0·음수를 포함한 원소 257개 | ReLU 결과 및 결과 복사 완료 |
-| 스트림 간 의존성 | 생성 스트림의 기록 후 소비 스트림에서 복사 | 이벤트 대기 뒤 배율 적용 결과 일치 |
-| 공유 메모리 | 값이 1인 원소 257개, 블록 크기 128 | 부분 합 `[128, 128, 1]` |
-| 선형 계층 | 입력 `[2, 3]`, 출력 2개 및 129개 | 첫 출력 쌍 `[8.5, 0.5]`과 반복된 기대값 |
-| 이벤트 시간 | 준비 실행 후 커널 100회 | 작업 완료 및 유한한 비음수 시간 반환 |
+| 배열 덧셈 | 0, 1, 127, 128, 129, 257, 1,048,576개 | 빈 입력은 제출 생략, 나머지는 모든 원소 비교 |
+| 패턴 기록 | 0, 1, 127, 128, 129, 257개 | 인덱스별 `3 * i + 7` 일치 |
+| 스트림 | 257개 ReLU, 별도 스트림의 이벤트 대기 | 완료 뒤 결과 및 생산·소비 의존성 |
+| 공유 메모리 | 257개의 1, 블록 크기 128 | 부분 합 `[128, 128, 1]` |
+| 선형 계층 | 입력 2개, 출력 2개와 129개 | `[8.5, 0.5]` 및 반복된 기대값 |
+| 이벤트 시간 | 준비 실행 뒤 커널 100회 | API 성공과 유한한 비음수 시간 |
 
-빈 입력 검사는 커널을 제출하지 않는 경로를 확인합니다. 선형 계층의 129개 출력 검사는 마지막 블록의 경계 처리를 포함합니다. 스트림 간 이벤트 검사는 실행 순서의 표현을 확인하며, 두 작업이 실제로 겹쳐 실행되었다고 주장하는 검사는 아닙니다.
+배열 덧셈의 입력값은 작은 정수에서 변환한 FP32 값입니다. 이 범위에서 정확히 표현되는 결과를 비교한 것이며, 모든 부동소수점 입력의 수치 조건을 검증한 것은 아닙니다.
 
-## 빌드 및 실행
+## 실제 실행 환경과 결과
 
-다음 명령은 CUDA Toolkit 12.6과 compute capability 6.1 장치를 대상으로 합니다. 소스 파일을 저장한 디렉터리에서 실행하세요.
+2026년 11월 8일 다음 환경에서 다시 컴파일하고 실행했습니다.
+
+| 항목 | 값 |
+| --- | --- |
+| GPU | NVIDIA GeForce GTX 1070 |
+| 드라이버 | 560.94 |
+| nvcc | CUDA 12.6, V12.6.85 |
+| GPU 대상 | `sm_61` |
+| 언어 | C++17 |
 
 ```bash
 nvcc -std=c++17 -O2 -arch=sm_61 examples.cu -o cuda-examples
 ./cuda-examples
 ```
 
-`-std=c++17`은 C++ 언어 버전을 지정하고, `-O2`는 최적화를 활성화합니다. `-arch=sm_61`은 이 검증 환경의 GPU 대상을 지정합니다. 다른 GPU에서는 해당 장치와 도구 버전에 맞는 대상을 사용해야 합니다. 최신 CUDA 도구가 이 이전 GPU 대상을 지원한다고 가정하지 마세요.
-
-예제 실행은 운영체제와 CUDA 드라이버가 장치를 사용할 수 있는 상태를 전제로 합니다. `nvcc`를 찾을 수 있다는 사실만으로 실제 GPU 실행 환경이 준비된 것은 아닙니다.
-
-## 실제 실행 결과
-
-2026년 11월 5일 문서 예제를 다음 환경에서 컴파일하고 실행했습니다.
-
-| 항목 | 값 |
-| --- | --- |
-| GPU | NVIDIA GeForce GTX 1070 |
-| NVIDIA 드라이버 | 560.94 |
-| CUDA 컴파일러 | 12.6, V12.6.85 |
-| 대상 | `sm_61` |
-| 언어 모드 | C++17 |
-
-프로그램은 종료 코드 0으로 완료되었으며 다음 결과를 출력했습니다.
+종료 코드 0으로 다음 결과를 확인했습니다.
 
 ```text
+PASS add: 0, 1, 127, 128, 129, 257, 1048576
 PASS pattern: 0, 1, 127, 128, 129, 257
 PASS stream: ReLU and event dependency
 PASS shared memory: [128, 128, 1]
@@ -61,31 +55,52 @@ PASS linear: [8.5, 0.5] and 129 outputs
 PASS event timing: completed 100 launches (not a benchmark)
 ```
 
-이 결과는 제공한 입력에 대해 코드 조각의 동작을 전체 프로그램에서 확인한 것입니다. 이벤트 시간은 API 사용과 완료 처리를 확인하는 데 사용했으며, 특정 성능 수치나 CPU 대비 가속률로 제시하지 않았습니다.
+최신 Toolkit이 이 구형 GPU의 코드 생성을 지원한다고 가정하지 않습니다. 다른 장치에서는 지원 대상과 도구 버전을 확인해야 합니다.
 
-## 자원 정리와 오류 처리
+## 컴파일 산출물 확인
 
-호스트 메모리, 장치 메모리, 스트림 및 이벤트는 소멸자를 가진 C++ 래퍼가 관리합니다. 래퍼의 복사를 금지하여 같은 자원을 중복 해제하지 않도록 했습니다. 정상 실행에서는 완료와 오류를 명시적으로 검사한 뒤 자원을 정리합니다.
+4편의 명령으로 PTX와 cubin을 각각 생성하고, cubin과 PTX를 함께 포함한 호스트 실행 파일을 빌드했습니다. PTX에는 `.version 8.5`, `.target sm_61`, `Add`의 진입점과 전역 메모리 로드·덧셈·스토어가 포함되어 있었습니다.
 
-스트림 예제는 버퍼보다 스트림이 먼저 정리되도록 생성 순서를 구성했습니다. 예외 경로에서도 진행 중인 작업의 완료를 가능한 범위에서 확인한 뒤 버퍼를 해제합니다. 소멸자에서는 예외를 던지지 않습니다. 비동기 실행 오류의 확인은 정상 경로의 명시적인 대기 호출에서 수행합니다.
+`cuobjdump`로 장치 바이너리의 `Add` 함수를 디스어셈블하여 `S2R`, `LDG.E`, `FADD`, `STG.E` 등의 명령을 확인했습니다. 이는 실제 생성된 코드의 관찰이며 다른 도구 옵션이나 GPU에서도 같은 명령열이 나온다는 보장은 아닙니다.
 
-이 자원 관리 코드는 예제의 실행 구조를 완결하기 위한 것입니다. 임의 크기의 입력을 받는 범용 라이브러리, 다중 장치 관리자 또는 모든 장치 오류에서 복구하는 시스템은 아닙니다.
+호스트 실행 파일의 ELF 이미지 목록과 PTX 덤프에서도 장치 코드와 PTX의 포함을 확인했습니다. 같은 파일을 일반 실행했을 때 앞의 결과 비교가 통과했습니다.
 
-## 검증 범위
+PTX가 포함된 같은 실행 파일을 다음과 같이 실행하여 드라이버의 PTX JIT 경로도 확인했습니다. 모든 출력 비교가 다시 통과했습니다.
 
-이번 검증에는 Compute Sanitizer를 사용한 메모리·경합 검사, 성능 프로파일링 및 다중 GPU 실행이 포함되지 않았습니다. 수치 비교에 사용한 입력도 제한적입니다. 실제 애플리케이션에서는 더 넓은 입력 범위와 수치 조건을 확인해야 합니다.
+```bash
+CUDA_FORCE_PTX_JIT=1 ./cuda-examples
+```
 
-공유 메모리 예제는 스레드 0이 부분 합을 직렬로 계산합니다. 이 코드는 배리어와 데이터 교환을 설명하기 위한 것이며 최적화된 병렬 합산 구현이 아닙니다. 선형 계층도 출력 하나를 스레드 하나에 배정한 기준 구현입니다.
+이 확인은 PTX를 강제로 사용했을 때 실행 가능한지를 검사한 것입니다. JIT 캐시를 삭제하지 않았으므로 첫 컴파일의 지연 시간이나 매번 재컴파일했다는 사실을 측정한 것은 아닙니다.
 
-문서의 CUDA C++ 예제와 mini-infer의 Rust 학습 프로젝트는 별개입니다. 이전에 보고된 Rust GPU 패턴 검사는 해당 프로젝트의 도구 연결을 확인한 기록입니다. 이번 문서 예제의 실행 결과가 사용자의 GPU 추론 구현 완료를 의미하지는 않습니다.
+## 검증에 포함되지 않은 것
 
-## 참고 문서
+이번 검증은 Compute Sanitizer의 메모리·경합 검사, Nsight 프로파일링, Tensor Core 실행, 다중 GPU, MIG·MPS와 성능 가속률 측정을 포함하지 않습니다. 이벤트 검사는 시간 API의 동작 확인이며 성능 보고가 아닙니다.
 
-역사적 배경은 당시 공시와 연구자의 원문을, API 동작은 NVIDIA의 공식 문서를 근거로 설명했습니다. 각 근거는 관련 본문에 연결되어 있습니다. 다음 자료는 전체 구조를 다시 확인할 때 사용할 수 있습니다.
+실행 성공만으로 모든 주소 범위와 동시성 조건을 증명하지 않습니다. 예제의 32비트 인덱스와 제한된 입력 크기, 고정된 공유 메모리 블록 크기는 일반 라이브러리의 계약과 다릅니다. 외부 입력을 받는 제품에서는 크기 곱셈의 오버플로, 실행 한도, 오류 복구도 추가로 다뤄야 합니다.
 
-- [CUDA C++ Programming Guide 12.6](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-c-programming-guide/index.html): 예제 도구 버전의 프로그래밍 모델과 언어 기능
-- [CUDA Runtime API](https://docs.nvidia.com/cuda/cuda-runtime-api/index.html): 함수의 인수, 반환값 및 동기화 조건
-- [CUDA 부동소수점 설명](https://docs.nvidia.com/cuda/floating-point/index.html): 수치 결과 비교의 배경
-- [Microsoft의 WDDM 아키텍처](https://learn.microsoft.com/ko-kr/windows-hardware/drivers/display/windows-vista-and-later-display-driver-model-architecture): Windows GPU 관리 계층
+이 코드는 문서용 CUDA C++ 예제입니다. mini-infer의 Rust 학습용 커널을 구현하거나 사용자의 GPU 추론 완료를 검증한 것이 아닙니다.
 
-[시리즈 안내](/posts/cuda-출근길-시리즈/) · [이전 문서: 자원 재사용과 측정](/posts/cuda-출근길-12-자원-재사용과-측정/)
+## 한국어 설명 자료를 읽는 방법
+
+개인 블로그는 익숙한 개념에서 새로운 구조로 넘어가는 설명 방식을 살펴보는 데 유용합니다. 다만 글의 특정 세대 수치나 간결한 비유를 보편적인 하드웨어 규칙으로 가져오지는 않았습니다. 기술적 계약은 다음 절의 공식 문서와 구분합니다.
+
+- pangyoalto의 [CPU 서버 개발자를 위한 GPU 아키텍처](https://pangyoalto.com/gpu-architecture/)는 CPU의 메모리 대기 문제를 출발점으로 삼습니다. 이 시리즈에서도 비교할 공통 문제를 먼저 세우되 CPU와 GPU 모두 캐시와 병렬성을 사용한다는 점을 유지했습니다.
+- Soeun’s Dots의 [CUDA와 NVIDIA GPU 아키텍처](https://ddoddii.github.io/post/cs/mgp/cuda-programming-3/)는 스레드 계층과 하드웨어의 관계를 별도로 다룹니다. 논리적 작업 단위와 물리적 자원을 나누어 그리는 데 참고했습니다.
+- Eraser’s StudyLog의 [SM 마이크로아키텍처](https://sirzzang.github.io/cs/CS-GPU-SM-Microarchitecture/)는 내부 구성과 제품 성능 수치를 연결합니다. 본문에서는 해당 세대의 구체적인 구성을 일반 규칙과 분리했습니다.
+- [GPU driver, CUDA, 라이브러리 셋팅하기](https://tkayyoo.tistory.com/17)는 설치 요소와 호환성을 구별하는 관점을 제공합니다. 본문에서는 Toolkit·런타임·드라이버와 코드 대상의 책임을 각각 설명했습니다.
+- New Sight의 [CUDA Programming](https://newsight.tistory.com/135)은 실행 절차와 메모리·스레드 개념을 함께 살펴볼 수 있는 개인 학습 기록입니다. 작성 시점이 오래된 글이므로 현재 API의 보장과 세대별 조건은 별도로 확인해야 합니다.
+
+## 기술 근거와 확장 읽기
+
+NVIDIA의 [CUDA C++ Programming Guide 12.6](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-c-programming-guide/index.html)는 실행·메모리·동기화 모델의 기준입니다. [nvcc 문서](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-compiler-driver-nvcc/index.html), [PTX ISA](https://docs.nvidia.com/cuda/archive/12.6.0/parallel-thread-execution/index.html), [Binary Utilities](https://docs.nvidia.com/cuda/archive/12.6.0/cuda-binary-utilities/index.html)는 소스에서 실행 코드까지의 각 경계를 설명합니다.
+
+마이크로아키텍처는 제품별 백서와 튜닝 가이드가 필요합니다. [Pascal 가이드](https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html)에서조차 GP100과 GP104가 구분됩니다. “한 세대의 GPU”라는 이름만으로 자원 수와 기능을 확정하지 않는 이유입니다.
+
+Microsoft의 [WDDM 아키텍처](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/windows-vista-and-later-display-driver-model-architecture)는 운영체제와 드라이버의 경계를 설명하는 자료입니다. 한국어 [WPF 스레딩 모델](https://learn.microsoft.com/ko-kr/dotnet/desktop/wpf/advanced/threading-model)은 GPU의 기술 근거가 아니라 구성 요소의 책임과 실행 흐름을 연결하는 서술 방식의 참고 자료입니다.
+
+역사는 당시 공시와 연구 논문으로, API 계약은 명세로, 제품 내부 구조는 아키텍처 문서로, 예제 결과는 실제 실행으로 확인했습니다. 서로 다른 종류의 근거를 같은 의미의 “검증”으로 합치지 않습니다.
+
+---
+
+이전: [12 — GPU 세대와 서비스 아키텍처로 확장하기](/posts/cuda-출근길-12-자원-재사용과-측정/) · [시리즈](/posts/cuda-출근길-시리즈/)

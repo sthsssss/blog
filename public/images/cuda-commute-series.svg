@@ -1,19 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
-<title id="title">CUDA commute series</title>
-<desc id="desc">CUDA: from its computing platform origins to compilation, GPU execution, memory and measurement.</desc>
-<rect width="1200" height="480" fill="#f3f7f4"/>
-<path d="M0 440H1200" stroke="#d7e4dc" stroke-width="2"/>
-<rect x="64" y="56" width="145" height="48" rx="24" fill="#2f7d32"/>
-<text x="136" y="88" font-family="system-ui,sans-serif" font-size="23" text-anchor="middle" fill="white">12 PARTS</text>
-<text x="64" y="193" font-family="system-ui,sans-serif" font-size="64" font-weight="700" fill="#193b2b">CUDA: concepts and execution</text>
-<text x="68" y="247" font-family="system-ui,sans-serif" font-size="28" fill="#536d60">Origins · Compilation · Memory · Synchronization</text>
-<g font-family="monospace" font-size="21" text-anchor="middle">
-<rect x="66" y="311" width="250" height="72" rx="12" fill="white" stroke="#b8d3c0"/>
-<text x="191" y="355" fill="#204c36">CUDA C++</text>
-<path d="M334 347H405m-13-9 13 9-13 9" fill="none" stroke="#2f7d32" stroke-width="3"/>
-<rect x="426" y="311" width="286" height="72" rx="12" fill="white" stroke="#b8d3c0"/>
-<text x="569" y="355" fill="#204c36">PTX / GPU code</text>
-<path d="M730 347H801m-13-9 13 9-13 9" fill="none" stroke="#2f7d32" stroke-width="3"/>
-<rect x="822" y="311" width="312" height="72" rx="12" fill="#193b2b"/>
-<text x="978" y="355" fill="#d9f3e0">GPU execution</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" role="img" aria-labelledby="title desc">
+<title id="title">GPU architecture: three connected views</title>
+<desc id="desc">Programming abstractions, CUDA software responsibilities and physical GPU resources. Connections show responsibilities, not one-to-one hardware assignments.</desc>
+<rect width="1200" height="600" rx="16" fill="#f3f7f4"/>
+<g font-family="system-ui,sans-serif">
+<text x="56" y="79" font-size="42" font-weight="700" fill="#193b2b">GPU Architecture</text>
+<text x="56" y="119" font-size="23" fill="#536d60">Program → Compilation and execution → Hardware</text>
+<g font-size="23" font-weight="600" fill="#193b2b">
+<text x="66" y="184">PROGRAM</text><text x="442" y="184">CUDA SOFTWARE</text><text x="851" y="184">HARDWARE</text>
+</g>
+<g fill="white" stroke="#b8d3c0" stroke-width="2">
+<rect x="56" y="210" width="292" height="82" rx="10"/><rect x="427" y="210" width="345" height="82" rx="10"/><rect x="850" y="210" width="294" height="82" rx="10"/>
+<rect x="56" y="316" width="292" height="82" rx="10"/><rect x="427" y="316" width="345" height="82" rx="10"/><rect x="850" y="316" width="294" height="82" rx="10"/>
+<rect x="56" y="422" width="292" height="82" rx="10"/><rect x="427" y="422" width="345" height="82" rx="10"/><rect x="850" y="422" width="294" height="82" rx="10"/>
+</g>
+<g fill="#204c36" font-size="22" text-anchor="middle">
+<text x="202" y="259">Kernel · Grid · Threads</text><text x="599" y="259">Compiler · Runtime · Driver</text><text x="997" y="259">SM · Execution units</text>
+<text x="202" y="365">Pointers · Arrays</text><text x="599" y="365">Mapping · Allocation · Copies</text><text x="997" y="365">Caches · Device DRAM</text>
+<text x="202" y="471">Streams · Events</text><text x="599" y="471">Ordering · Completion</text><text x="997" y="471">Compute · Copy engines</text>
+</g>
+<g stroke="#2f7d32" stroke-width="3" fill="none">
+<path d="M362 251h49m-10-8 10 8-10 8M786 251h49m-10-8 10 8-10 8"/>
+<path d="M362 357h49m-10-8 10 8-10 8M786 357h49m-10-8 10 8-10 8"/>
+<path d="M362 463h49m-10-8 10 8-10 8M786 463h49m-10-8 10 8-10 8"/>
+</g>
+<text x="56" y="557" font-size="20" fill="#536d60">Responsibilities and relationships — not a one-to-one resource assignment</text>
 </g></svg>
