@@ -82,6 +82,28 @@ pre code {
   padding: 0;
 }
 
+/* Markdown tables: visible cell borders and local horizontal scrolling. */
+article table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+}
+
+article th,
+article td {
+  border: 1px solid #aeb8c2;
+  padding: 0.65rem 0.85rem;
+  vertical-align: top;
+}
+
+article th {
+  background-color: #edf2f7;
+  font-weight: 700;
+}
+
 /* nav 스타일 */
 header {
   border-bottom: 1px solid #e5e5e5;
@@ -93,11 +115,13 @@ header nav {
   margin: 0 auto;
   padding: 1rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0;
 }
 
 .menu {
+  margin-left: auto;
   background-color: #ffffff;
   border: 1px solid #e5e5e5;
   color: #1a1a1a;
@@ -113,16 +137,13 @@ header nav {
 }
 
 .nav-links {
+  flex-basis: 100%;
   width: 100%;
   display: none;
   margin: 0;
   padding: 0;
   background-color: #fafafa;
   border-top: 1px solid #e5e5e5;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
 }
 
 .nav-links a {
@@ -144,12 +165,16 @@ header nav {
   background-color: #eeeeee;
 }
 
-:has(.menu[aria-expanded="true"]) .nav-links {
-  display: unset;
+@media screen and (max-width: 767px) {
+  .menu[aria-expanded="true"] ~ .nav-links {
+    display: block;
+    margin-top: 1rem;
+  }
 }
 
 @media screen and (min-width: 768px) {
   .nav-links {
+    flex-basis: auto;
     margin-left: 2rem;
     display: flex;
     position: static;
