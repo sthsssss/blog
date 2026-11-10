@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+<title id="title">Generic parameters and associated types</title>
+<desc id="desc">GenericIterator selects an implementation using Counter and T. AssociatedIterator selects the Counter implementation, which defines Item as u32.</desc>
+<rect width="1200" height="630" fill="#101827"/>
+<g font-family="monospace" fill="#e9eef7">
+<text x="65" y="95" font-size="36">Rust: where does the item type come from?</text>
+<rect x="60" y="150" width="1080" height="170" rx="16" fill="#21324c"/>
+<text x="90" y="200" font-size="28" fill="#7dd3fc">GenericIterator&lt;T&gt;</text>
+<text x="90" y="255" font-size="25">Counter + u32    → implementation A</text>
+<text x="90" y="293" font-size="25">Counter + String → implementation B</text>
+<rect x="60" y="350" width="1080" height="170" rx="16" fill="#21324c"/>
+<text x="90" y="400" font-size="28" fill="#a7f3d0">AssociatedIterator</text>
+<text x="90" y="455" font-size="25">Counter → implementation → Item = u32</text>
+<text x="65" y="580" font-size="23">Implementation selection → associated type definition</text>
+</g></svg>
