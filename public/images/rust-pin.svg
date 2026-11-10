@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+<title id="title">Pin: moving the pointer, keeping the pointee</title><desc id="desc">Ownership of Pin Box F moves from pinned to a while the Future remains at the same heap address. Local pinning returns a borrowed pinned pointer.</desc>
+<rect width="1200" height="630" fill="#111827"/>
+<g font-family="monospace" fill="#e5e7eb">
+<text x="60" y="85" font-size="38">Pin: what stays at the same address?</text>
+<rect x="60" y="145" width="420" height="120" rx="15" fill="#24344d"/>
+<text x="90" y="190" font-size="27">pinned: Pin&lt;Box&lt;F&gt;&gt;</text><text x="90" y="235" font-size="22" fill="#7dd3fc">move ownership ↓</text>
+<rect x="60" y="310" width="420" height="110" rx="15" fill="#24344d"/>
+<text x="90" y="370" font-size="27">a: Pin&lt;Box&lt;F&gt;&gt;</text>
+<rect x="720" y="205" width="420" height="190" rx="15" fill="#164e46"/>
+<text x="750" y="255" font-size="30">Future F</text><text x="750" y="305" font-size="24">same heap allocation</text><text x="750" y="350" font-size="24" fill="#a7f3d0">state may change</text>
+<path d="M485 200 L700 270 M485 365 L700 325" stroke="#7dd3fc" stroke-width="4" fill="none"/>
+<text x="60" y="500" font-size="25">Move the owning pointer. Keep the pinned value in place.</text>
+<text x="60" y="555" font-size="23" fill="#a7f3d0">pin!(value) → Pin&lt;&amp;mut T&gt;   /   Box::pin(value) → Pin&lt;Box&lt;T&gt;&gt;</text>
+</g></svg>
