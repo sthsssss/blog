@@ -198,6 +198,70 @@ fn main() {
     println!("로컬 저장 범위를 벗어난 뒤");
 }
 """, 'Pin 참조를 버린 뒤\nResource 정리\n로컬 저장 범위를 벗어난 뒤\n'),
+    ('box_basics', r"""fn main() {
+    let mut owner = Box::new(42_u32);
+    println!("처음 값: {}", *owner);
+
+    *owner = 100;
+    let borrowed: &u32 = &*owner;
+    println!("빌려서 읽은 값: {borrowed}");
+
+    let other = owner;
+    println!("새 소유자로 읽은 값: {}", *other);
+}
+""", '처음 값: 42\n빌려서 읽은 값: 100\n새 소유자로 읽은 값: 100\n'),
+    ('borrow_then_move', r"""struct Data {
+    value: u32,
+}
+
+fn main() {
+    let mut other = Box::new(Data { value: 42 });
+
+    {
+        let borrowed: &Data = &*other;
+        println!("공유 빌림: {}", borrowed.value);
+    }
+    {
+        let borrowed_mut: &mut Data = &mut *other;
+        borrowed_mut.value = 100;
+    }
+    println!("빌림 이후 Box로 읽기: {}", other.value);
+
+    let data: Data = *other;
+    println!("이동한 값: {}", data.value);
+}
+""", '공유 빌림: 42\n빌림 이후 Box로 읽기: 100\n이동한 값: 100\n'),
+    ('copy_pointee', r"""fn main() {
+    let number_box = Box::new(42_u32);
+    let n = *number_box;
+
+    println!("복사한 숫자: {n}");
+    println!("Box 안의 숫자: {}", *number_box);
+}
+""", '복사한 숫자: 42\nBox 안의 숫자: 42\n'),
+    ('unbox_future', r"""use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+async fn hello() -> u32 {
+    println!("hello 본문 실행");
+    42
+}
+
+fn main() {
+    let boxed = Box::new(hello());
+    println!("1. Future를 Box에 저장");
+
+    let future = *boxed;
+    println!("2. Future 본체를 Box 밖으로 이동");
+
+    let mut pinned = pin!(future);
+    let mut cx = Context::from_waker(Waker::noop());
+    let result = pinned.as_mut().poll(&mut cx);
+    println!("3. 완료 결과: {result:?}");
+    assert_eq!(result, Poll::Ready(42));
+}
+""", '1. Future를 Box에 저장\n2. Future 본체를 Box 밖으로 이동\nhello 본문 실행\n3. 완료 결과: Ready(42)\n'),
 ]
 FAILURES = [
     ('new_requires_unpin', r"""use std::pin::Pin; async fn hello() {} fn main() { let mut f = hello(); let _p = Pin::new(&mut f); }""", 'E0277'),
@@ -205,6 +269,30 @@ FAILURES = [
     ('into_inner_requires_unpin', r"""use std::pin::Pin; async fn hello() {} fn main() { let p = Box::pin(hello()); let _b = Pin::into_inner(p); }""", 'E0277'),
     ('old_binding_moved', r"""use std::pin::pin; async fn hello() {} fn main() { let f = hello(); let _p = pin!(f); drop(f); }""", 'E0382'),
     ('poll_without_reborrow', r"""use std::{future::Future,pin::pin,task::{Context,Waker}}; async fn hello() {} fn main() { let p = pin!(hello()); let mut cx = Context::from_waker(Waker::noop()); let _first = p.poll(&mut cx); let _second = p.poll(&mut cx); }""", 'E0382'),
+    ('box_read_after_move', r"""struct Data { value: u32 } fn main() { let other = Box::new(Data {value:42}); let data = *other; println!("{}", data.value); println!("{}",other.value); }""", 'E0382'),
+    ('move_from_shared_ref', r"""struct Data {
+    value: u32,
+}
+
+fn main() {
+    let original = Data { value: 42 };
+    let reference = &original;
+    let data = *reference;
+    println!("{}", data.value);
+}
+""", 'E0507'),
+    ('move_from_mut_ref', r"""struct Data {
+    value: u32,
+}
+
+fn main() {
+    let mut original = Data { value: 42 };
+    let reference = &mut original;
+    let data = *reference;
+    println!("{}", data.value);
+}
+""", 'E0507'),
+    ('move_pinned_future', r"""async fn hello() {} fn main() { let pinned = Box::pin(hello()); let _future = *pinned; }""", 'E0507'),
 ]
 
 print(subprocess.check_output(["rustc", "--version"], text=True).strip())
@@ -228,4 +316,4 @@ with tempfile.TemporaryDirectory(prefix="rust-pin-examples-") as directory:
         if result.returncode == 0 or ("error[" + expected_error + "]") not in result.stderr:
             raise RuntimeError(name + " did not produce " + expected_error + "\n" + result.stderr)
         print("PASS", name, expected_error)
-print("9 executable examples and 5 expected compilation failures verified.")
+print("13 executable examples and 9 expected compilation failures verified.")
