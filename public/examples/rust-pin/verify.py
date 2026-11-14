@@ -5,6 +5,29 @@ import subprocess
 import tempfile
 
 CASES = [
+    ('single_poll', r"""use std::future::Future;
+use std::pin::pin;
+use std::task::{Context, Poll, Waker};
+
+async fn hello() -> u32 {
+    println!("hello 본문 실행");
+    42
+}
+
+fn main() {
+    let future = hello();
+    println!("1. Future 생성");
+
+    let mut pinned = pin!(future);
+    println!("2. 고정된 참조 준비");
+
+    let mut cx = Context::from_waker(Waker::noop());
+    println!("3. poll 호출 직전");
+    let result = pinned.as_mut().poll(&mut cx);
+    println!("4. poll 반환: {result:?}");
+    assert_eq!(result, Poll::Ready(42));
+}
+""", '1. Future 생성\n2. 고정된 참조 준비\n3. poll 호출 직전\nhello 본문 실행\n4. poll 반환: Ready(42)\n'),
     ('move_before_pin', r"""async fn hello() {
     println!("hello");
 }
@@ -123,6 +146,58 @@ fn main() {
     println!("Pin<Box<F>> 이동 후에도 Future 주소 유지");
 }
 """, 'Pin<Box<F>> 이동 후에도 Future 주소 유지\n'),
+    ('manual_future', r"""use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll, Waker};
+
+struct OneStep {
+    value: Option<u32>,
+}
+
+impl Future for OneStep {
+    type Output = u32;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<u32> {
+        let state: &mut OneStep = self.get_mut();
+        let value = state.value.take().expect("완료된 작업을 다시 poll함");
+        println!("poll 내부: 결과를 꺼내 상태를 None으로 변경");
+        Poll::Ready(value)
+    }
+}
+
+fn main() {
+    let mut task = OneStep { value: Some(42) };
+    let mut cx = Context::from_waker(Waker::noop());
+    let result = Pin::new(&mut task).poll(&mut cx);
+
+    assert_eq!(result, Poll::Ready(42));
+    assert_eq!(task.value, None);
+    println!("반환값: {result:?}, 남은 상태: {:?}", task.value);
+}
+""", 'poll 내부: 결과를 꺼내 상태를 None으로 변경\n반환값: Ready(42), 남은 상태: None\n'),
+    ('local_drop', r"""use std::pin::pin;
+
+struct Resource;
+
+impl Drop for Resource {
+    fn drop(&mut self) {
+        println!("Resource 정리");
+    }
+}
+
+async fn hold(resource: Resource) {
+    drop(resource);
+}
+
+fn main() {
+    {
+        let pinned = pin!(hold(Resource));
+        drop(pinned);
+        println!("Pin 참조를 버린 뒤");
+    }
+    println!("로컬 저장 범위를 벗어난 뒤");
+}
+""", 'Pin 참조를 버린 뒤\nResource 정리\n로컬 저장 범위를 벗어난 뒤\n'),
 ]
 FAILURES = [
     ('new_requires_unpin', r"""use std::pin::Pin; async fn hello() {} fn main() { let mut f = hello(); let _p = Pin::new(&mut f); }""", 'E0277'),
@@ -153,4 +228,4 @@ with tempfile.TemporaryDirectory(prefix="rust-pin-examples-") as directory:
         if result.returncode == 0 or ("error[" + expected_error + "]") not in result.stderr:
             raise RuntimeError(name + " did not produce " + expected_error + "\n" + result.stderr)
         print("PASS", name, expected_error)
-print("6 executable examples and 5 expected compilation failures verified.")
+print("9 executable examples and 5 expected compilation failures verified.")
